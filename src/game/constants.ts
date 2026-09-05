@@ -1,6 +1,7 @@
 export const MAP_WIDTH = 15;
 export const MAP_HEIGHT = 13;
 export const TILE_SIZE = 48;
+export const HUD_HEIGHT = 48;
 
 export const CellType = {
   EMPTY: 0,
