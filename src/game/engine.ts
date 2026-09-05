@@ -17,7 +17,8 @@ import {
   updateParticles,
   updateScorchMarks,
 } from './particles';
-import type { Bomb, Explosion, GameSprites, Particle, ScorchMark } from './types';
+import bombSprite from '../../assets/Bomb.png';
+import type { Bomb, Explosion, GameOverStats, GameSprites, Particle, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
@@ -36,6 +37,13 @@ export class GameEngine {
   health = 3;
   maxHealth = 3;
   invulnerableTimer = 0;
+
+  // Game over state & statistics
+  public onGameOver?: (stats: GameOverStats) => void;
+  public isGameOver = false;
+  private startTime = 0;
+  private bombsPlacedCount = 0;
+  private blocksDestroyedCount = 0;
 
   // Entities and visual effects
   private bombs: Bomb[] = [];
@@ -59,6 +67,7 @@ export class GameEngine {
 
   start(): void {
     window.addEventListener('keydown', this.onKeyDown);
+    this.startTime = performance.now();
     this.lastTime = performance.now();
     this.rafId = requestAnimationFrame(this.tick);
   }
@@ -69,6 +78,8 @@ export class GameEngine {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
+    if (this.isGameOver) return;
+
     let dx = 0;
     let dy = 0;
 
@@ -146,8 +157,10 @@ export class GameEngine {
   }
 
   private spawnBomb(): void {
+    if (this.isGameOver) return;
     if (this.bombs.some((b) => b.x === this.x && b.y === this.y)) return;
     this.bombs.push({ x: this.x, y: this.y, timer: 3.0 });
+    this.bombsPlacedCount++;
   }
 
   private explodeBomb(bomb: Bomb): void {
@@ -172,6 +185,7 @@ export class GameEngine {
       if (cell === CellType.BLOCK) {
         this.grid[ny][nx] = CellType.EMPTY;
         tiles.push({ x: nx, y: ny });
+        this.blocksDestroyedCount++;
       } else if (cell === CellType.EMPTY) {
         tiles.push({ x: nx, y: ny });
       }
@@ -192,17 +206,33 @@ export class GameEngine {
     }
   }
 
-  private takeDamage(): void {
-    if (this.invulnerableTimer > 0) return;
+  private takeDamage(cause = 'Dinamite'): void {
+    if (this.invulnerableTimer > 0 || this.isGameOver) return;
     this.health--;
     if (this.health <= 0) {
-      this.restart();
+      this.health = 0;
+      this.isGameOver = true;
+      const elapsedSec = Math.floor((performance.now() - this.startTime) / 1000);
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+      const stats: GameOverStats = {
+        killerName: cause,
+        killerSprite: bombSprite,
+        timeSurvived: timeStr,
+        bombsPlaced: this.bombsPlacedCount,
+        blocksDestroyed: this.blocksDestroyedCount,
+      };
+
+      this.onGameOver?.(stats);
     } else {
       this.invulnerableTimer = 1.0;
     }
   }
 
-  private restart(): void {
+  public restart(): void {
+    this.isGameOver = false;
     this.health = this.maxHealth;
     this.x = TILE_SIZE;
     this.y = TILE_SIZE;
@@ -211,6 +241,9 @@ export class GameEngine {
     this.animTimer = 0;
     this.invulnerableTimer = 0;
     this.shakeTrauma = 0;
+    this.bombsPlacedCount = 0;
+    this.blocksDestroyedCount = 0;
+    this.startTime = performance.now();
     this.bombs = [];
     this.explosions = [];
     this.particles = [];
@@ -297,12 +330,12 @@ export class GameEngine {
       }
     }
 
-    if (this.invulnerableTimer <= 0) {
+    if (this.invulnerableTimer <= 0 && !this.isGameOver) {
       const playerTx = Math.round(this.x / TILE_SIZE);
       const playerTy = Math.round(this.y / TILE_SIZE);
       for (const exp of this.explosions) {
         if (exp.tiles.some((p) => p.x === playerTx && p.y === playerTy)) {
-          this.takeDamage();
+          this.takeDamage('Dinamite');
           break;
         }
       }
@@ -310,8 +343,7 @@ export class GameEngine {
   }
 
   private render(): void {
-    this.ctx.fillStyle = '#111';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width);
 
