@@ -1,67 +1,59 @@
-import { CellType, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
+import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { generateMap } from './map';
-import banditSprite from '../../assets/Bandit.png';
-import bombSprite from '../../assets/Bomb.png';
-import bombExplodingSprite from '../../assets/BombExploding.png';
-import wallSprite from '../../assets/Walls.png';
-import grassSprite from '../../assets/Grass.png';
-import brickSprite from '../../assets/Bricks.png';
-
-interface Bomb {
-  x: number;
-  y: number;
-  timer: number;
-}
-
-interface Explosion {
-  tiles: Point[];
-  timer: number;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  size: number;
-  life: number;
-}
+import { loadGameSprites } from './assets';
+import {
+  renderBombs,
+  renderExplosions,
+  renderHud,
+  renderMap,
+  renderPlayer,
+} from './renderer';
+import {
+  renderParticles,
+  renderScorchMarks,
+  spawnDust,
+  spawnExplosionDebris,
+  spawnWickSpark,
+  updateParticles,
+  updateScorchMarks,
+} from './particles';
+import type { Bomb, Explosion, GameSprites, Particle, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
   private grid: Grid;
-  private x = TILE_SIZE;
-  private y = TILE_SIZE;
-  private rafId = 0;
-  private lastTime = 0;
-  private banditImg = new Image();
-  private bombImg = new Image();
-  private bombExplodingImg = new Image();
-  private wallImg = new Image();
-  private grassImg = new Image();
-  private brickImg = new Image();
+  private sprites: GameSprites;
+
+  // Player state
+  x = TILE_SIZE;
+  y = TILE_SIZE;
+  startX = TILE_SIZE;
+  startY = TILE_SIZE;
+  animTimer = 0;
+  lastDx = 0;
+  lastDy = 0;
+  facing = 1;
+  health = 3;
+  maxHealth = 3;
+  invulnerableTimer = 0;
+
+  // Entities and visual effects
   private bombs: Bomb[] = [];
   private explosions: Explosion[] = [];
   private particles: Particle[] = [];
-  private animTimer = 0;
-  private startX = TILE_SIZE;
-  private startY = TILE_SIZE;
-  private lastDx = 0;
-  private lastDy = 0;
-  private facing = 1;
+  private scorchMarks: ScorchMark[] = [];
+  private shakeTrauma = 0;
+
+  private rafId = 0;
+  private lastTime = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
     this.canvas.width = MAP_WIDTH * TILE_SIZE;
-    this.canvas.height = MAP_HEIGHT * TILE_SIZE;
+    this.canvas.height = MAP_HEIGHT * TILE_SIZE + HUD_HEIGHT;
     this.ctx.imageSmoothingEnabled = false;
-    this.banditImg.src = banditSprite;
-    this.bombImg.src = bombSprite;
-    this.bombExplodingImg.src = bombExplodingSprite;
-    this.wallImg.src = wallSprite;
-    this.grassImg.src = grassSprite;
-    this.brickImg.src = brickSprite;
+
+    this.sprites = loadGameSprites();
     this.grid = generateMap();
   }
 
@@ -111,11 +103,32 @@ export class GameEngine {
       const pushTileX = pushX / TILE_SIZE;
       const pushTileY = pushY / TILE_SIZE;
 
-      if (this.grid[pushTileY]?.[pushTileX] !== CellType.EMPTY) return;
-      if (this.bombs.some((b) => b.x === pushX && b.y === pushY)) return;
+      const isBlocked =
+        this.grid[pushTileY]?.[pushTileX] !== CellType.EMPTY ||
+        this.bombs.some((b) => b !== bomb && b.x === pushX && b.y === pushY);
 
+      if (isBlocked) {
+        bomb.resistTimer = 0.12;
+        bomb.resistDx = dx;
+        bomb.resistDy = dy;
+        return;
+      }
+
+      const fromX = bomb.slideTimer && bomb.slideTimer > 0 ? (bomb.renderX ?? nextX) : nextX;
+      const fromY = bomb.slideTimer && bomb.slideTimer > 0 ? (bomb.renderY ?? nextY) : nextY;
+
+      bomb.startX = fromX;
+      bomb.startY = fromY;
       bomb.x = pushX;
       bomb.y = pushY;
+      bomb.slideDuration = 0.18;
+      bomb.slideTimer = 0.18;
+      bomb.slideDx = dx;
+      bomb.slideDy = dy;
+      bomb.renderX = fromX;
+      bomb.renderY = fromY;
+
+      spawnDust(this.particles, fromX + TILE_SIZE / 2, fromY + TILE_SIZE / 2, dx, dy, 5, 25);
     }
 
     const prevX = this.x;
@@ -128,27 +141,13 @@ export class GameEngine {
     this.lastDx = dx;
     this.lastDy = dy;
     if (dx !== 0) this.facing = dx;
-    this.spawnStepParticles(prevX, prevY, dx, dy);
-  }
 
-  private spawnStepParticles(x: number, y: number, dx: number, dy: number): void {
-    const colors = ['#e2c078', '#dcb672', '#ecd69d', '#d2b474', '#c29b53'];
-    for (let i = 0; i < 5; i++) {
-      this.particles.push({
-        x: x + TILE_SIZE / 2 + (Math.random() - 0.5) * 14,
-        y: y + TILE_SIZE - 4 + (Math.random() - 0.5) * 6,
-        vx: -dx * (Math.random() * 30 + 10) + (Math.random() - 0.5) * 20,
-        vy: -dy * (Math.random() * 30 + 10) - Math.random() * 20,
-        size: Math.random() * 3 + 2,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        life: 0.25,
-      });
-    }
+    spawnDust(this.particles, prevX + TILE_SIZE / 2, prevY + TILE_SIZE - 4, dx, dy, 4, 20);
   }
 
   private spawnBomb(): void {
     if (this.bombs.some((b) => b.x === this.x && b.y === this.y)) return;
-    this.bombs.push({ x: this.x, y: this.y, timer: 3 });
+    this.bombs.push({ x: this.x, y: this.y, timer: 3.0 });
   }
 
   private explodeBomb(bomb: Bomb): void {
@@ -184,7 +183,39 @@ export class GameEngine {
       }
     }
 
-    this.explosions.push({ tiles, timer: 0.4 });
+    this.explosions.push({ tiles, timer: 0.45 });
+    this.shakeTrauma = 0.5;
+
+    for (const p of tiles) {
+      this.scorchMarks.push({ x: p.x, y: p.y, life: 1.5 });
+      spawnExplosionDebris(this.particles, p.x, p.y);
+    }
+  }
+
+  private takeDamage(): void {
+    if (this.invulnerableTimer > 0) return;
+    this.health--;
+    if (this.health <= 0) {
+      this.restart();
+    } else {
+      this.invulnerableTimer = 1.0;
+    }
+  }
+
+  private restart(): void {
+    this.health = this.maxHealth;
+    this.x = TILE_SIZE;
+    this.y = TILE_SIZE;
+    this.startX = TILE_SIZE;
+    this.startY = TILE_SIZE;
+    this.animTimer = 0;
+    this.invulnerableTimer = 0;
+    this.shakeTrauma = 0;
+    this.bombs = [];
+    this.explosions = [];
+    this.particles = [];
+    this.scorchMarks = [];
+    this.grid = generateMap();
   }
 
   private tick = (now: number) => {
@@ -202,19 +233,55 @@ export class GameEngine {
       this.animTimer = Math.max(0, this.animTimer - dt);
     }
 
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.life -= dt;
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-      }
+    if (this.shakeTrauma > 0) {
+      this.shakeTrauma = Math.max(0, this.shakeTrauma - dt * 4.0);
     }
+
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer -= dt;
+    }
+
+    updateScorchMarks(this.scorchMarks, dt);
+    updateParticles(this.particles, dt);
 
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const bomb = this.bombs[i];
       bomb.timer -= dt;
+
+      if (bomb.slideTimer && bomb.slideTimer > 0 && bomb.slideDuration) {
+        bomb.slideTimer -= dt;
+        const progress = Math.min(1, 1 - bomb.slideTimer / bomb.slideDuration);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        bomb.renderX = bomb.startX! + (bomb.x - bomb.startX!) * ease;
+        bomb.renderY = bomb.startY! + (bomb.y - bomb.startY!) * ease;
+
+        if (Math.random() < 0.35) {
+          spawnDust(this.particles, bomb.renderX + TILE_SIZE / 2, bomb.renderY + TILE_SIZE / 2, bomb.slideDx ?? 0, bomb.slideDy ?? 0, 1, 10);
+        }
+
+        if (bomb.slideTimer <= 0) {
+          bomb.slideTimer = 0;
+          bomb.renderX = bomb.x;
+          bomb.renderY = bomb.y;
+          spawnDust(this.particles, bomb.x + TILE_SIZE / 2, bomb.y + TILE_SIZE / 2, 0, 0, 2, 10);
+        }
+      }
+
+      if (bomb.resistTimer && bomb.resistTimer > 0) {
+        bomb.resistTimer -= dt;
+        if (bomb.resistTimer <= 0) {
+          bomb.resistTimer = 0;
+          bomb.resistDx = 0;
+          bomb.resistDy = 0;
+        }
+      }
+
+      const urgency = 1 - Math.max(0, bomb.timer / 3.0);
+      if (Math.random() < 0.25 + urgency * 0.45) {
+        const curX = bomb.slideTimer && bomb.slideTimer > 0 ? (bomb.renderX ?? bomb.x) : bomb.x;
+        const curY = bomb.slideTimer && bomb.slideTimer > 0 ? (bomb.renderY ?? bomb.y) : bomb.y;
+        spawnWickSpark(this.particles, curX + TILE_SIZE / 2 - 22.5, curY + TILE_SIZE / 2 - 15.5);
+      }
 
       if (bomb.timer <= 0) {
         this.explodeBomb(bomb);
@@ -223,87 +290,45 @@ export class GameEngine {
     }
 
     for (let i = this.explosions.length - 1; i >= 0; i--) {
-      this.explosions[i].timer -= dt;
-      if (this.explosions[i].timer <= 0) {
+      const exp = this.explosions[i];
+      exp.timer -= dt;
+      if (exp.timer <= 0) {
         this.explosions.splice(i, 1);
+      }
+    }
+
+    if (this.invulnerableTimer <= 0) {
+      const playerTx = Math.round(this.x / TILE_SIZE);
+      const playerTy = Math.round(this.y / TILE_SIZE);
+      for (const exp of this.explosions) {
+        if (exp.tiles.some((p) => p.x === playerTx && p.y === playerTy)) {
+          this.takeDamage();
+          break;
+        }
       }
     }
   }
 
   private render(): void {
-    this.ctx.fillStyle = '#1e1e1e';
+    this.ctx.fillStyle = '#111';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    for (let y = 0; y < MAP_HEIGHT; y++) {
-      for (let x = 0; x < MAP_WIDTH; x++) {
-        this.ctx.drawImage(this.grassImg, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        const cell = this.grid[y][x];
-        if (cell === CellType.WALL) {
-          this.ctx.drawImage(this.wallImg, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        } else if (cell === CellType.BLOCK) {
-          this.ctx.drawImage(this.brickImg, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        }
-      }
-    }
+    renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width);
 
-    for (const p of this.particles) {
-      this.ctx.fillStyle = p.color;
-      this.ctx.fillRect(p.x, p.y, p.size, p.size);
-    }
-
-    for (const exp of this.explosions) {
-      const alpha = Math.min(exp.timer / 0.4, 1);
-      for (const p of exp.tiles) {
-        this.ctx.fillStyle = `rgba(239, 68, 68, ${0.8 * alpha})`;
-        this.ctx.fillRect(p.x * TILE_SIZE, p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        this.ctx.fillStyle = `rgba(251, 191, 36, ${0.9 * alpha})`;
-        this.ctx.fillRect(p.x * TILE_SIZE + 8, p.y * TILE_SIZE + 8, TILE_SIZE - 16, TILE_SIZE - 16);
-      }
-    }
-
-    for (const bomb of this.bombs) {
-      const blinkSpeed = bomb.timer < 1 ? 12 : 5;
-      const isExploding = Math.floor(bomb.timer * blinkSpeed) % 2 === 0;
-      const img = isExploding ? this.bombExplodingImg : this.bombImg;
-      this.ctx.drawImage(img, bomb.x, bomb.y, TILE_SIZE, TILE_SIZE);
-    }
-
-    let renderX = this.x;
-    let renderY = this.y;
-    let scaleX = 1;
-    let scaleY = 1;
-    let rotation = 0;
-
-    if (this.animTimer > 0) {
-      const total = 0.14;
-      const hopDuration = 0.085;
-      const t = 1 - this.animTimer / total;
-
-      if (t < hopDuration / total) {
-        const hopP = t / (hopDuration / total);
-        renderX = this.startX + (this.x - this.startX) * hopP;
-        renderY = this.startY + (this.y - this.startY) * hopP - Math.sin(hopP * Math.PI) * 10;
-        const stretch = Math.sin(hopP * Math.PI) * 0.25;
-        scaleY = 1 + stretch;
-        scaleX = 1 - stretch * 0.4;
-        rotation = this.lastDx * 0.15 * Math.sin(hopP * Math.PI);
-      } else {
-        const landP = (t - hopDuration / total) / (1 - hopDuration / total);
-        const squash = Math.sin(landP * Math.PI) * 0.35;
-        scaleY = 1 - squash;
-        scaleX = 1 + squash * 0.5;
-      }
-    } else {
-      const breath = Math.sin(this.lastTime / 350) * 0.03;
-      scaleY = 1 + breath;
-      scaleX = 1 - breath * 0.4;
-    }
+    const shake = Math.pow(this.shakeTrauma, 2) * 5;
+    const shakeX = (Math.random() * 2 - 1) * shake;
+    const shakeY = (Math.random() * 2 - 1) * shake;
 
     this.ctx.save();
-    this.ctx.translate(renderX + TILE_SIZE / 2, renderY + TILE_SIZE);
-    this.ctx.scale(this.facing * scaleX, scaleY);
-    this.ctx.rotate(this.facing * rotation);
-    this.ctx.drawImage(this.banditImg, -TILE_SIZE / 2, -TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    this.ctx.translate(shakeX, HUD_HEIGHT + shakeY);
+
+    renderMap(this.ctx, this.grid, this.sprites);
+    renderScorchMarks(this.ctx, this.scorchMarks);
+    renderExplosions(this.ctx, this.explosions, this.sprites);
+    renderBombs(this.ctx, this.bombs, this.sprites, this.lastTime);
+    renderParticles(this.ctx, this.particles);
+    renderPlayer(this.ctx, this, this.sprites.bandit, this.lastTime);
+
     this.ctx.restore();
   }
 }
