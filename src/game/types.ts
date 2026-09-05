@@ -40,6 +40,7 @@ export interface ScorchMark {
 }
 
 export interface GameSprites {
+  enemies: HTMLImageElement[];
   bandit: HTMLImageElement;
   bomb: HTMLImageElement;
   bombExploding: HTMLImageElement;
@@ -49,4 +50,20 @@ export interface GameSprites {
   healthFull: HTMLImageElement;
   healthEmpty: HTMLImageElement;
   explosions: HTMLImageElement[];
+}
+
+export interface Enemy {
+  mode: 'patrol' | 'chase';
+  patrolDirection: Point;
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  sprite: number;
+  facing: number;
+  lastDx: number;
+  animTimer: number;
+  invulnerableTimer: number;
+  moveTimer: number;
+  moveInterval: number;
 }
