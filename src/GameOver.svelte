@@ -2,6 +2,7 @@
   import type { GameOverStats } from "./game/types";
   import goParchment from "../assets/go.png";
   import banditSprite from "../assets/Bandit.png";
+  import enemySprite from "../assets/Enemy1.png";
   import bombSprite from "../assets/Bomb.png";
   import brickSprite from "../assets/Bricks.png";
 
@@ -43,9 +44,16 @@
         <li>
           <div>
             <img src={banditSprite} alt="" />
-            <span>Tempo vivo:</span>
+            <span>Pontos:</span>
           </div>
-          <span>{stats.timeSurvived}s</span>
+          <span>{stats.score ?? 0}</span>
+        </li>
+        <li>
+          <div>
+            <img src={enemySprite} alt="" />
+            <span>Inimigos:</span>
+          </div>
+          <span>{stats.enemiesKilled ?? 0}</span>
         </li>
         <li>
           <div>

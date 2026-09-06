@@ -1,5 +1,5 @@
-import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
-import type { Bomb, Explosion, GameSprites } from './types';
+import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, getLevelHueOffset, type Grid, type Point } from './constants';
+import type { Bomb, Explosion, GameSprites, LevelTransition } from './types';
 
 export function renderHud(
   ctx: CanvasRenderingContext2D,
@@ -9,26 +9,41 @@ export function renderHud(
   canvasWidth: number,
   level: number,
   enemyCount: number,
-  exitRevealed: boolean
+  exitRevealed: boolean,
+  score: number = 0
 ): void {
   const heartSize = TILE_SIZE;
-  const startX = (canvasWidth - maxHealth * heartSize) / 2;
-  const startY = (HUD_HEIGHT - heartSize) / 2;
+  const startX = Math.round((canvasWidth - maxHealth * heartSize) / 2);
+  const startY = Math.round((HUD_HEIGHT - heartSize) / 2);
 
   ctx.save();
-  ctx.font = 'bold 16px monospace';
   ctx.textBaseline = 'middle';
+
+  // Left: Level and Score
+  ctx.textAlign = 'left';
+  ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
   ctx.fillStyle = '#f8fafc';
   ctx.fillText(`NÍVEL ${level}`, 16, 16);
-  ctx.font = '12px monospace';
-  ctx.fillText(`Inimigos: ${enemyCount}`, 16, 35);
+
+  ctx.font = '600 15px "Pixelify Sans", cursive, monospace';
+  ctx.fillStyle = '#facc15';
+  ctx.fillText(`PONTOS: ${score}`, 16, 34);
+
+  // Right: Enemy Count and Status Objective
   ctx.textAlign = 'right';
-  ctx.fillStyle = enemyCount === 0 && exitRevealed ? '#86efac' : '#e2e8f0';
-  const status = !exitRevealed ? 'Encontre a saída oculta' :
-    enemyCount > 0 ? 'Elimine os inimigos' : 'Entre na saída!';
-  ctx.fillText(status, canvasWidth - 16, HUD_HEIGHT / 2);
+  ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
+  ctx.fillStyle = enemyCount > 0 ? '#f87171' : '#4ade80';
+  ctx.fillText(`INIMIGOS: ${enemyCount}`, canvasWidth - 16, 16);
+
+  ctx.font = '600 15px "Pixelify Sans", cursive, monospace';
+  ctx.fillStyle = enemyCount === 0 && exitRevealed ? '#86efac' : '#94a3b8';
+  const status = !exitRevealed ? 'Ache a saída' :
+    enemyCount > 0 ? 'Derrote os inimigos' : 'Entre na saída!';
+  ctx.fillText(status, canvasWidth - 16, 34);
+
   ctx.restore();
 
+  // Center: Health Hearts
   for (let i = 0; i < maxHealth; i++) {
     const img = i < health ? sprites.healthFull : sprites.healthEmpty;
     ctx.drawImage(img, startX + i * heartSize, startY, heartSize, heartSize);
@@ -49,8 +64,14 @@ export function renderExit(
 export function renderMap(
   ctx: CanvasRenderingContext2D,
   grid: Grid,
-  sprites: GameSprites
+  sprites: GameSprites,
+  level: number = 1
 ): void {
+  const hue = getLevelHueOffset(level);
+  const prevFilter = ctx.filter;
+  if (hue !== 0 && typeof ctx.filter === 'string') {
+    ctx.filter = `hue-rotate(${hue}deg)`;
+  }
   for (let y = 0; y < MAP_HEIGHT; y++) {
     for (let x = 0; x < MAP_WIDTH; x++) {
       ctx.drawImage(sprites.grass, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -61,6 +82,9 @@ export function renderMap(
         ctx.drawImage(sprites.brick, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }
+  }
+  if (hue !== 0 && typeof ctx.filter === 'string') {
+    ctx.filter = prevFilter || 'none';
   }
 }
 
@@ -198,6 +222,7 @@ export function renderPlayer(
     lastDx: number;
     facing: number;
     invulnerableTimer: number;
+    transition?: LevelTransition;
   },
   sprite: HTMLImageElement,
   time: number
@@ -207,8 +232,87 @@ export function renderPlayer(
   let scaleX = 1;
   let scaleY = 1;
   let rotation = 0;
+  let alpha = 1.0;
 
-  if (player.animTimer > 0) {
+  const transition = player.transition;
+
+  if (transition && transition.phase === 'exiting') {
+    const p = Math.min(1, Math.max(0, 1 - transition.timer / transition.duration));
+    const targetX = transition.exitX ?? player.x;
+    const targetY = transition.exitY ?? player.y;
+    const holeX = targetX + TILE_SIZE / 2;
+    const holeY = targetY + 28;
+
+    const startCenterX = player.x + TILE_SIZE / 2;
+    const startCenterY = player.y + TILE_SIZE / 2;
+
+    let curCenterX: number;
+    let curCenterY: number;
+    let scale: number;
+    let rotation: number;
+    let alpha: number;
+
+    if (p < 0.25) {
+      // Step/hop directly into the center of the trapdoor opening
+      const t = p / 0.25;
+      const hop = Math.sin(t * Math.PI) * 6;
+      curCenterX = startCenterX + (holeX - startCenterX) * t;
+      curCenterY = startCenterY + (holeY - startCenterY) * t - hop;
+      scale = 1.0 + Math.sin(t * Math.PI) * 0.1;
+      rotation = player.facing * Math.sin(t * Math.PI) * 0.1;
+      alpha = 1.0;
+    } else {
+      // Swirled directly into the vortex center
+      const subP = (p - 0.25) / 0.75;
+      curCenterX = holeX;
+      curCenterY = holeY;
+      scale = Math.max(0, 1 - subP);
+      rotation = player.facing * subP * Math.PI * 3.5;
+      alpha = Math.max(0, 1 - Math.pow(subP, 1.4));
+    }
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.translate(curCenterX, curCenterY);
+    ctx.scale(player.facing * scale, scale);
+    ctx.rotate(rotation);
+    ctx.drawImage(sprite, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+    ctx.restore();
+    return;
+  }
+ else if (transition && transition.phase === 'entering') {
+    const p = Math.min(1, Math.max(0, 1 - transition.timer / transition.duration));
+    if (p < 0.35) {
+      // Falling from the ceiling with gravity acceleration
+      const fallT = p / 0.35;
+      const easeFall = fallT * fallT;
+      renderX = player.x;
+      renderY = player.y - 70 * (1 - easeFall);
+      scaleY = 1.25;
+      scaleX = 0.8;
+    } else if (p < 0.6) {
+      // Squash bounce on landing impact
+      const bounceT = (p - 0.35) / 0.25;
+      const squash = Math.sin(bounceT * Math.PI) * 0.45;
+      renderX = player.x;
+      renderY = player.y;
+      scaleY = 1.0 - squash;
+      scaleX = 1.0 + squash * 0.65;
+    } else if (p < 0.82) {
+      // Elastic recoil recovery
+      const recT = (p - 0.6) / 0.22;
+      const rebound = Math.sin(recT * Math.PI) * 0.14;
+      renderX = player.x;
+      renderY = player.y;
+      scaleY = 1.0 + rebound;
+      scaleX = 1.0 - rebound * 0.4;
+    } else {
+      renderX = player.x;
+      renderY = player.y;
+      scaleX = 1;
+      scaleY = 1;
+    }
+  } else if (player.animTimer > 0) {
     const total = 0.14;
     const hopDuration = 0.085;
     const t = 1 - player.animTimer / total;
@@ -234,15 +338,107 @@ export function renderPlayer(
   }
 
   if (player.invulnerableTimer > 0 && Math.floor(player.invulnerableTimer * 10) % 2 === 0) {
-    ctx.globalAlpha = 0.35;
+    alpha *= 0.35;
   }
 
   ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   ctx.translate(renderX + TILE_SIZE / 2, renderY + TILE_SIZE);
   ctx.scale(player.facing * scaleX, scaleY);
   ctx.rotate(player.facing * rotation);
   ctx.drawImage(sprite, -TILE_SIZE / 2, -TILE_SIZE, TILE_SIZE, TILE_SIZE);
   ctx.restore();
+}
 
-  ctx.globalAlpha = 1.0;
+export function renderIrisWipe(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  level: number = 1
+): void {
+  const maxRadius = Math.hypot(width, height);
+  if (radius >= maxRadius) return;
+
+  ctx.save();
+  ctx.fillStyle = '#08080a';
+  ctx.beginPath();
+  ctx.rect(0, 0, width, height);
+  if (radius > 0) {
+    ctx.arc(centerX, centerY, Math.max(0, radius), 0, Math.PI * 2, true);
+  }
+  ctx.fill();
+
+  // Glowing ring around iris aperture matching the level hue
+  if (radius > 4 && radius < maxRadius - 20) {
+    const hue = getLevelHueOffset(level);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `hsl(${(50 + hue) % 360}, 96%, 54%)`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = `hsl(${(50 + hue) % 360}, 100%, 65%)`;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+export function renderVortex(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  progress: number,
+  time: number,
+  level: number = 1
+): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const hue = getLevelHueOffset(level);
+  const spinAngle = time * 0.01;
+  const numArms = 4;
+
+  // 4 luminous yellow shades shifting with the current level hue
+  const baseYellowHues = [48, 52, 45, 55];
+  const baseLightnesses = [56, 66, 48, 72];
+  const colors = baseYellowHues.map((h, i) => `hsl(${(h + hue) % 360}, 96%, ${baseLightnesses[i]}%)`);
+
+  // Swirling glowing spiral arms converging to the center
+  for (let i = 0; i < numArms; i++) {
+    const baseAngle = (i / numArms) * Math.PI * 2 + spinAngle;
+    ctx.strokeStyle = colors[i % colors.length];
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = colors[i % colors.length];
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+
+    const maxR = 24 * Math.min(1, progress * 2.5);
+    for (let r = maxR; r >= 2; r -= 1.5) {
+      const angle = baseAngle + (maxR - r) * 0.24;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * (r * 0.75); // 0.75 perspective tilt matching 2.5D view
+      if (r === maxR) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Dark central void singularity
+  const voidRadius = Math.max(2, 6 * (1 - progress * 0.3));
+  ctx.fillStyle = '#05070d';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, voidRadius, voidRadius * 0.75, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `hsl(${(50 + hue) % 360}, 96%, 60%)`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore();
 }

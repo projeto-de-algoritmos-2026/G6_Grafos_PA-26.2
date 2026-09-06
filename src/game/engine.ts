@@ -8,20 +8,28 @@ import {
   renderExplosions,
   renderExit,
   renderHud,
+  renderIrisWipe,
   renderMap,
   renderPlayer,
+  renderVortex,
 } from './renderer';
 import {
   renderParticles,
   renderScorchMarks,
   spawnDust,
+  spawnEnemyDeathParticles,
   spawnExplosionDebris,
+  spawnLandingImpact,
+  spawnPortalParticles,
   spawnWickSpark,
   updateParticles,
   updateScorchMarks,
 } from './particles';
 import bombSprite from '../../assets/Bomb.png';
-import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, Particle, ScorchMark } from './types';
+import enemy1Sprite from '../../assets/Enemy1.png';
+import enemy2Sprite from '../../assets/Enemy2.png';
+import enemy3Sprite from '../../assets/Enemy3.png';
+import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, LevelTransition, Particle, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
@@ -42,14 +50,18 @@ export class GameEngine {
   health = 3;
   maxHealth = 3;
   invulnerableTimer = 0;
+  public transition: LevelTransition = { phase: 'none', timer: 0, duration: 0 };
 
   // Game over state & statistics
   public onGameOver?: (stats: GameOverStats) => void;
+  public onLevelChange?: (level: number) => void;
   public isGameOver = false;
   public isPlaying = false;
+  public score = 0;
   private startTime = 0;
   private bombsPlacedCount = 0;
   private blocksDestroyedCount = 0;
+  private enemiesKilledCount = 0;
 
   // Entities and visual effects
   private bombs: Bomb[] = [];
@@ -75,10 +87,15 @@ export class GameEngine {
   }
 
   start(): void {
-    window.addEventListener('keydown', this.onKeyDown);
+    if (typeof window !== 'undefined') window.addEventListener('keydown', this.onKeyDown);
+    this.score = 0;
+    this.enemiesKilledCount = 0;
     this.startTime = performance.now();
     this.lastTime = performance.now();
-    this.rafId = requestAnimationFrame(this.tick);
+    this.onLevelChange?.(this.level);
+    if (typeof requestAnimationFrame !== 'undefined') {
+      this.rafId = requestAnimationFrame(this.tick);
+    }
   }
 
   startPlay(): void {
@@ -88,12 +105,12 @@ export class GameEngine {
   }
 
   destroy(): void {
-    cancelAnimationFrame(this.rafId);
-    window.removeEventListener('keydown', this.onKeyDown);
+    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.rafId);
+    if (typeof window !== 'undefined') window.removeEventListener('keydown', this.onKeyDown);
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (!this.isPlaying || this.isGameOver) return;
+    if (!this.isPlaying || this.isGameOver || this.transition.phase !== 'none') return;
 
     let dx = 0;
     let dy = 0;
@@ -203,6 +220,7 @@ export class GameEngine {
         this.grid[ny][nx] = CellType.EMPTY;
         tiles.push({ x: nx, y: ny });
         this.blocksDestroyedCount++;
+        this.score += 50;
       } else if (cell === CellType.EMPTY) {
         tiles.push({ x: nx, y: ny });
       }
@@ -223,7 +241,7 @@ export class GameEngine {
     }
   }
 
-  private takeDamage(cause = 'Dinamite'): void {
+  private takeDamage(cause = 'Dinamite', killerSprite = bombSprite): void {
     if (this.invulnerableTimer > 0 || this.isGameOver) return;
     this.health--;
     if (this.health <= 0) {
@@ -236,13 +254,19 @@ export class GameEngine {
 
       const stats: GameOverStats = {
         killerName: cause,
-        killerSprite: bombSprite,
+        killerSprite,
         timeSurvived: timeStr,
         bombsPlaced: this.bombsPlacedCount,
         blocksDestroyed: this.blocksDestroyedCount,
+        score: this.score,
+        enemiesKilled: this.enemiesKilledCount,
       };
 
-      this.onGameOver?.(stats);
+      if (this.onGameOver) {
+        this.onGameOver(stats);
+      } else {
+        this.restart();
+      }
     } else {
       this.invulnerableTimer = 1.0;
     }
@@ -252,8 +276,12 @@ export class GameEngine {
     this.isGameOver = false;
     this.isPlaying = true;
     this.level = 1;
+    this.score = 0;
+    this.enemiesKilledCount = 0;
     this.health = this.maxHealth;
+    this.transition = { phase: 'none', timer: 0, duration: 0 };
     this.loadLevel();
+    this.onLevelChange?.(this.level);
   }
 
   private loadLevel(): void {
@@ -280,13 +308,39 @@ export class GameEngine {
   }
 
   private checkEnemyContact(): void {
-    if (this.enemies.some((enemy) => enemy.x === this.x && enemy.y === this.y)) this.takeDamage();
+    const touching = this.enemies.find((enemy) => {
+      if (enemy.x === this.x && enemy.y === this.y) return true;
+      if (
+        this.animTimer > 0 && enemy.animTimer > 0 &&
+        enemy.x === this.startX && enemy.y === this.startY &&
+        this.x === enemy.startX && this.y === enemy.startY
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    if (touching) {
+      const enemySprites = [enemy1Sprite, enemy2Sprite, enemy3Sprite];
+      const sprite = enemySprites[touching.sprite] ?? enemy1Sprite;
+      this.takeDamage('Slime', sprite);
+    }
   }
 
   private removeExplodedEnemies(): void {
     this.enemies = this.enemies.filter((enemy) => {
       if (!isInExplosion(enemy, this.explosions)) return true;
-      spawnExplosionDebris(this.particles, enemy.x / TILE_SIZE, enemy.y / TILE_SIZE);
+      let cx = enemy.x + TILE_SIZE / 2;
+      let cy = enemy.y + TILE_SIZE / 2;
+      if (enemy.animTimer > 0) {
+        const total = 0.14;
+        const t = Math.max(0, Math.min(1, 1 - enemy.animTimer / total));
+        cx = enemy.startX + (enemy.x - enemy.startX) * t + TILE_SIZE / 2;
+        cy = enemy.startY + (enemy.y - enemy.startY) * t + TILE_SIZE / 2;
+      }
+      spawnEnemyDeathParticles(this.particles, cx, cy, enemy.sprite);
+      this.score += 200;
+      this.enemiesKilledCount++;
       return false;
     });
   }
@@ -302,10 +356,6 @@ export class GameEngine {
   };
 
   private update(dt: number): void {
-    if (this.animTimer > 0) {
-      this.animTimer = Math.max(0, this.animTimer - dt);
-    }
-
     if (this.shakeTrauma > 0) {
       this.shakeTrauma = Math.max(0, this.shakeTrauma - dt * 4.0);
     }
@@ -316,6 +366,41 @@ export class GameEngine {
 
     updateScorchMarks(this.scorchMarks, dt);
     updateParticles(this.particles, dt);
+
+    if (this.transition.phase === 'exiting') {
+      this.transition.timer -= dt;
+      const cx = (this.transition.exitX ?? this.exit.x * TILE_SIZE) + TILE_SIZE / 2;
+      const cy = (this.transition.exitY ?? this.exit.y * TILE_SIZE) + 28;
+      spawnPortalParticles(this.particles, cx, cy, this.level);
+
+      if (this.transition.timer <= 0) {
+        this.score += 1000;
+        this.level++;
+        this.loadLevel();
+        this.onLevelChange?.(this.level);
+        this.startEnterTransition();
+      }
+      return;
+    }
+
+    if (this.transition.phase === 'entering') {
+      this.transition.timer -= dt;
+      const progress = 1 - this.transition.timer / this.transition.duration;
+      if (progress >= 0.35 && !this.transition.landingTriggered) {
+        this.transition.landingTriggered = true;
+        spawnLandingImpact(this.particles, this.x + TILE_SIZE / 2, this.y + TILE_SIZE - 4);
+        this.shakeTrauma = 0.25;
+      }
+
+      if (this.transition.timer <= 0) {
+        this.transition = { phase: 'none', timer: 0, duration: 0 };
+      }
+      return;
+    }
+
+    if (this.animTimer > 0) {
+      this.animTimer = Math.max(0, this.animTimer - dt);
+    }
 
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const bomb = this.bombs[i];
@@ -386,22 +471,52 @@ export class GameEngine {
         }
       }
     }
-    this.tryNextLevel();
+    this.tryNextLevel(dt);
   }
 
-  private tryNextLevel(): void {
+  private tryNextLevel(dt: number): void {
+    if (this.transition.phase !== 'none') return;
     // Finish the arrival animation and let flames expire before changing maps.
     if (this.animTimer > 0 || isInExplosion(this, this.explosions)) return;
     if (!canLeaveLevel(this.grid, this.exit, this, this.enemies.length)) return;
-    this.level++;
-    this.loadLevel();
+
+    if (dt === 0) {
+      this.score += 1000;
+      this.level++;
+      this.loadLevel();
+      this.onLevelChange?.(this.level);
+      return;
+    }
+
+    this.startExitTransition();
+  }
+
+  public startExitTransition(): void {
+    const duration = 0.55;
+    this.transition = {
+      phase: 'exiting',
+      timer: duration,
+      duration,
+      exitX: this.exit.x * TILE_SIZE,
+      exitY: this.exit.y * TILE_SIZE,
+    };
+  }
+
+  public startEnterTransition(): void {
+    const duration = 0.85;
+    this.transition = {
+      phase: 'entering',
+      timer: duration,
+      duration,
+      landingTriggered: false,
+    };
   }
 
   private render(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width,
-      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit));
+      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit), this.score);
 
     const shake = Math.pow(this.shakeTrauma, 2) * 5;
     const shakeX = (Math.random() * 2 - 1) * shake;
@@ -410,10 +525,14 @@ export class GameEngine {
     this.ctx.save();
     this.ctx.translate(shakeX, HUD_HEIGHT + shakeY);
 
-    renderMap(this.ctx, this.grid, this.sprites);
+    renderMap(this.ctx, this.grid, this.sprites, this.level);
     renderScorchMarks(this.ctx, this.scorchMarks);
     if (isExitRevealed(this.grid, this.exit)) {
       renderExit(this.ctx, this.exit, this.enemies.length === 0 ? this.sprites.exitOpen : this.sprites.exit);
+      if (this.transition.phase === 'exiting') {
+        const p = Math.min(1, Math.max(0, 1 - this.transition.timer / this.transition.duration));
+        renderVortex(this.ctx, this.exit.x * TILE_SIZE + TILE_SIZE / 2, this.exit.y * TILE_SIZE + 28, p, this.lastTime, this.level);
+      }
     }
     renderExplosions(this.ctx, this.explosions, this.sprites);
     renderBombs(this.ctx, this.bombs, this.sprites, this.lastTime);
@@ -424,5 +543,37 @@ export class GameEngine {
     renderPlayer(this.ctx, this, this.sprites.bandit, this.lastTime);
 
     this.ctx.restore();
+
+    this.renderTransitions();
+  }
+
+  private renderTransitions(): void {
+    const maxRadius = Math.hypot(this.canvas.width, this.canvas.height);
+
+    if (this.transition.phase === 'exiting') {
+      const p = Math.min(1, Math.max(0, 1 - this.transition.timer / this.transition.duration));
+      const exitPixelX = (this.transition.exitX ?? this.exit.x * TILE_SIZE) + TILE_SIZE / 2;
+      const exitPixelY = HUD_HEIGHT + (this.transition.exitY ?? this.exit.y * TILE_SIZE) + 28;
+
+      // Iris closes from p = 0.25 to 1.0
+      if (p >= 0.25) {
+        const irisT = (p - 0.25) / 0.75;
+        const ease = irisT < 0.5 ? 2 * irisT * irisT : 1 - Math.pow(-2 * irisT + 2, 2) / 2;
+        const radius = maxRadius * (1 - ease);
+        renderIrisWipe(this.ctx, this.canvas.width, this.canvas.height, exitPixelX, exitPixelY, radius, this.level);
+      }
+    } else if (this.transition.phase === 'entering') {
+      const p = Math.min(1, Math.max(0, 1 - this.transition.timer / this.transition.duration));
+      const spawnPixelX = this.x + TILE_SIZE / 2;
+      const spawnPixelY = HUD_HEIGHT + this.y + TILE_SIZE / 2;
+
+      // Iris opens from p = 0 to 0.45
+      if (p < 0.45) {
+        const irisT = p / 0.45;
+        const ease = 1 - Math.pow(1 - irisT, 3);
+        const radius = maxRadius * ease;
+        renderIrisWipe(this.ctx, this.canvas.width, this.canvas.height, spawnPixelX, spawnPixelY, radius, this.level);
+      }
+    }
   }
 }

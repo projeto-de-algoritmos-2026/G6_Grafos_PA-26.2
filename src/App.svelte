@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { GameEngine } from "./game/engine";
+  import { getLevelHueOffset } from "./game/constants";
   import StartScreen from "./StartScreen.svelte";
   import GameOver from "./GameOver.svelte";
   import type { GameOverStats } from "./game/types";
@@ -11,12 +12,19 @@
   let engine: GameEngine | null = null;
   let gameState = $state<GameState>("menu");
   let gameOverStats = $state<GameOverStats | null>(null);
+  let currentLevel = $state(1);
+
+  let bgHue = $derived(getLevelHueOffset(currentLevel));
 
   onMount(() => {
     engine = new GameEngine(canvas);
+    (window as any).__engine = engine;
     engine.onGameOver = (stats) => {
       gameState = "gameover";
       gameOverStats = stats;
+    };
+    engine.onLevelChange = (level) => {
+      currentLevel = level;
     };
     engine.start();
     return () => engine?.destroy();
@@ -40,7 +48,10 @@
 </script>
 
 <main>
-  <div class="bg-overlay"></div>
+  <div
+    class="bg-overlay"
+    style="filter: blur(14px) brightness(0.25) contrast(1.1) hue-rotate({bgHue}deg);"
+  ></div>
   <canvas
     bind:this={canvas}
     class:is-blurred={gameState === "menu" || gameState === "gameover"}
@@ -74,6 +85,7 @@
     background: url("../assets/bg.png") no-repeat center center;
     background-size: cover;
     filter: blur(14px) brightness(0.25) contrast(1.1);
+    transition: filter 0.8s ease;
     transform: scale(1.05);
     pointer-events: none;
     z-index: 0;

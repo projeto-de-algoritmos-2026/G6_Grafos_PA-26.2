@@ -28,6 +28,8 @@ export interface GameOverStats {
   timeSurvived: string;
   bombsPlaced: number;
   blocksDestroyed: number;
+  score: number;
+  enemiesKilled: number;
 }
 
 export interface Particle {
@@ -39,6 +41,8 @@ export interface Particle {
   size: number;
   life: number;
   maxLife: number;
+  gravity?: number;
+  drag?: number;
 }
 
 export interface ScorchMark {
@@ -76,4 +80,15 @@ export interface Enemy {
   invulnerableTimer: number;
   moveTimer: number;
   moveInterval: number;
+}
+
+export type TransitionPhase = 'none' | 'exiting' | 'entering';
+
+export interface LevelTransition {
+  phase: TransitionPhase;
+  timer: number;
+  duration: number;
+  exitX?: number;
+  exitY?: number;
+  landingTriggered?: boolean;
 }
