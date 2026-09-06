@@ -1,6 +1,48 @@
 import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, getLevelHueOffset, type Grid, type Point } from './constants';
 import type { Bomb, Enemy, Explosion, GameSprites, LevelTransition } from './types';
 
+interface TintedTileCache {
+  grass: CanvasImageSource;
+  wall: CanvasImageSource;
+  brick: CanvasImageSource;
+}
+
+const tintedTileCache = new Map<number, TintedTileCache>();
+
+function createTintedCanvas(source: HTMLImageElement, hue: number): CanvasImageSource {
+  if (hue === 0 || !source.complete || source.naturalWidth === 0) {
+    return source;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = source.naturalWidth || TILE_SIZE;
+  canvas.height = source.naturalHeight || TILE_SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return source;
+  ctx.imageSmoothingEnabled = false;
+  ctx.filter = `hue-rotate(${hue}deg)`;
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
+export function getTintedTiles(sprites: GameSprites, level: number): TintedTileCache {
+  const hue = getLevelHueOffset(level);
+  if (hue === 0) {
+    return { grass: sprites.grass, wall: sprites.wall, brick: sprites.brick };
+  }
+  let cached = tintedTileCache.get(hue);
+  if (!cached) {
+    cached = {
+      grass: createTintedCanvas(sprites.grass, hue),
+      wall: createTintedCanvas(sprites.wall, hue),
+      brick: createTintedCanvas(sprites.brick, hue),
+    };
+    if (sprites.grass.complete && sprites.grass.naturalWidth > 0) {
+      tintedTileCache.set(hue, cached);
+    }
+  }
+  return cached;
+}
+
 export function renderHud(
   ctx: CanvasRenderingContext2D,
   sprites: GameSprites,
@@ -71,24 +113,17 @@ export function renderMap(
   sprites: GameSprites,
   level: number = 1
 ): void {
-  const hue = getLevelHueOffset(level);
-  const prevFilter = ctx.filter;
-  if (hue !== 0 && typeof ctx.filter === 'string') {
-    ctx.filter = `hue-rotate(${hue}deg)`;
-  }
+  const tiles = getTintedTiles(sprites, level);
   for (let y = 0; y < MAP_HEIGHT; y++) {
     for (let x = 0; x < MAP_WIDTH; x++) {
-      ctx.drawImage(sprites.grass, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      ctx.drawImage(tiles.grass, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       const cell = grid[y][x];
       if (cell === CellType.WALL) {
-        ctx.drawImage(sprites.wall, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        ctx.drawImage(tiles.wall, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       } else if (cell === CellType.BLOCK) {
-        ctx.drawImage(sprites.brick, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        ctx.drawImage(tiles.brick, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }
-  }
-  if (hue !== 0 && typeof ctx.filter === 'string') {
-    ctx.filter = prevFilter || 'none';
   }
 }
 

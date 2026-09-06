@@ -116,7 +116,6 @@
     background: url("../assets/bg.png") no-repeat center center;
     background-size: cover;
     filter: blur(14px) brightness(0.25) contrast(1.1);
-    transition: filter 0.8s ease;
     transform: scale(1.05);
     pointer-events: none;
     z-index: 0;
