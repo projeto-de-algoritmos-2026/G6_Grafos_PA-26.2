@@ -75,7 +75,7 @@
     <p class="farewell">adeus mundo cruel! xoxo</p>
 
     <footer class="actions">
-      <button type="button" onclick={onRestart}>TENTAR DE NOVO</button>
+      <button type="button" onclick={onRestart}>RECOMEÇAR</button>
       <span>[ ESPAÇO ou ENTER ]</span>
     </footer>
   </div>

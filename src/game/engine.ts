@@ -30,6 +30,10 @@ import bombSprite from '../../assets/Bomb.png';
 import enemy1Sprite from '../../assets/Enemy1.png';
 import enemy2Sprite from '../../assets/Enemy2.png';
 import enemy3Sprite from '../../assets/Enemy3.png';
+import enemy4Sprite from '../../assets/Enemy4.png';
+import enemy5Sprite from '../../assets/Enemy5.png';
+import enemy6Sprite from '../../assets/Enemy6.png';
+import enemy7Sprite from '../../assets/Enemy7.png';
 import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, GraphMetricsStats, LevelTransition, Particle, ScorchMark } from './types';
 
 export class GameEngine {
@@ -82,7 +86,7 @@ export class GameEngine {
 
     this.sprites = loadGameSprites();
     this.grid = generateMap();
-    this.enemies = spawnEnemies(this.grid);
+    this.enemies = spawnEnemies(this.grid, this.level);
     this.exit = hideExit(this.grid);
   }
 
@@ -116,21 +120,20 @@ export class GameEngine {
     let avgPathLen = 0;
 
     for (const e of this.enemies) {
-      if (e.nodesExpanded) {
-        totalExpanded += e.nodesExpanded;
+      if (e.mode === 'chase' && e.currentPath && e.currentPath.length > 0) {
+        totalExpanded += e.nodesExpanded ?? 0;
         maxTime = Math.max(maxTime, e.searchTimeMs ?? 0);
-        if (e.currentPath && e.currentPath.length > 0) {
-          avgPathLen += e.currentPath.length;
-          activeChasers++;
-        }
+        avgPathLen += e.currentPath.length;
+        activeChasers++;
       }
     }
 
-    const pathLenStr = activeChasers > 0 ? `${Math.round(avgPathLen / activeChasers)} passos` : '0 passos';
+    const steps = activeChasers > 0 ? Math.round(avgPathLen / activeChasers) : 0;
+    const pathLenStr = activeChasers > 0 ? `${steps} ${steps === 1 ? 'passo' : 'passos'}` : '0 passos';
     const hue = getLevelHueOffset(this.level);
     const themeColor = `hsl(${(48 + hue) % 360}, 96%, 54%)`;
 
-    const key = `on-${totalExpanded}-${maxTime.toFixed(1)}-${pathLenStr}-${themeColor}`;
+    const key = `on-${totalExpanded}-${maxTime.toFixed(2)}-${pathLenStr}-${themeColor}`;
     if (key !== this.lastStatsKey) {
       this.lastStatsKey = key;
       this.onGraphStatsUpdate({
@@ -165,13 +168,13 @@ export class GameEngine {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
+    if (!this.isPlaying || this.isGameOver || this.transition.phase !== 'none') return;
+
     if (e.code === 'KeyG') {
       e.preventDefault();
       this.toggleGraphOverlay();
       return;
     }
-
-    if (!this.isPlaying || this.isGameOver || this.transition.phase !== 'none') return;
 
     let dx = 0;
     let dy = 0;
@@ -303,7 +306,7 @@ export class GameEngine {
   }
 
   private takeDamage(cause = 'Dinamite', killerSprite = bombSprite): void {
-    if (this.invulnerableTimer > 0 || this.isGameOver) return;
+    if (!this.isPlaying || this.invulnerableTimer > 0 || this.isGameOver) return;
     this.health--;
     if (this.health <= 0) {
       this.health = 0;
@@ -333,16 +336,23 @@ export class GameEngine {
     }
   }
 
-  public restart(): void {
+  public resetToMenu(): void {
     this.isGameOver = false;
-    this.isPlaying = true;
+    this.isPlaying = false;
     this.level = 1;
     this.score = 0;
     this.enemiesKilledCount = 0;
     this.health = this.maxHealth;
     this.transition = { phase: 'none', timer: 0, duration: 0 };
+    this.showGraphOverlay = false;
     this.loadLevel();
     this.onLevelChange?.(this.level);
+    this.emitGraphStats();
+  }
+
+  public restart(): void {
+    this.resetToMenu();
+    this.isPlaying = true;
   }
 
   private loadLevel(): void {
@@ -364,8 +374,10 @@ export class GameEngine {
     this.particles = [];
     this.scorchMarks = [];
     this.grid = generateMap();
-    this.enemies = spawnEnemies(this.grid);
+    this.enemies = spawnEnemies(this.grid, this.level);
     this.exit = hideExit(this.grid);
+    this.lastStatsKey = '';
+    this.emitGraphStats();
   }
 
   private checkEnemyContact(): void {
@@ -382,8 +394,16 @@ export class GameEngine {
     });
 
     if (touching) {
-      const enemySprites = [enemy1Sprite, enemy2Sprite, enemy3Sprite];
-      const sprite = enemySprites[touching.sprite] ?? enemy1Sprite;
+      const enemySprites = [
+        enemy1Sprite,
+        enemy2Sprite,
+        enemy3Sprite,
+        enemy4Sprite,
+        enemy5Sprite,
+        enemy6Sprite,
+        enemy7Sprite,
+      ];
+      const sprite = enemySprites[touching.sprite % enemySprites.length] ?? enemy1Sprite;
       this.takeDamage('Slime', sprite);
     }
   }
@@ -427,6 +447,8 @@ export class GameEngine {
 
     updateScorchMarks(this.scorchMarks, dt);
     updateParticles(this.particles, dt);
+
+    if (!this.isPlaying || this.isGameOver) return;
 
     if (this.transition.phase === 'exiting') {
       this.transition.timer -= dt;
@@ -513,6 +535,7 @@ export class GameEngine {
     updateEnemies(this.enemies, this.grid, this, this.bombs, dt);
     this.removeExplodedEnemies();
     this.checkEnemyContact();
+    this.emitGraphStats();
 
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const exp = this.explosions[i];

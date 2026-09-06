@@ -42,25 +42,98 @@ function patrolStep(enemy: Enemy, grid: Grid, start: Point, blocked: Set<string>
   return undefined;
 }
 
-export function spawnEnemies(grid: Grid): Enemy[] {
-  const spawns = [
-    { x: MAP_WIDTH - 2, y: 1 },
-    { x: 1, y: MAP_HEIGHT - 2 },
-    { x: MAP_WIDTH - 2, y: MAP_HEIGHT - 2 },
-  ];
-  return spawns.map((p, sprite) => {
+export function getSlimeCount(level: number): number {
+  return Math.max(1, level) + 2;
+}
+
+const BASE_SPAWN_POINTS: Point[] = [
+  { x: MAP_WIDTH - 2, y: 1 },              // 13, 1 (Top-Right)
+  { x: 1, y: MAP_HEIGHT - 2 },              // 1, 11 (Bottom-Left)
+  { x: MAP_WIDTH - 2, y: MAP_HEIGHT - 2 },  // 13, 11 (Bottom-Right)
+  { x: 7, y: 1 },                           // 7, 1 (Top-Center)
+  { x: 7, y: MAP_HEIGHT - 2 },              // 7, 11 (Bottom-Center)
+  { x: MAP_WIDTH - 2, y: 7 },               // 13, 7 (Right-Center)
+  { x: 7, y: 5 },                           // 7, 5 (Center)
+  { x: 1, y: 7 },                           // 1, 7 (Left-Center)
+  { x: MAP_WIDTH - 2, y: 5 },               // 13, 5
+  { x: 5, y: MAP_HEIGHT - 2 },              // 5, 11
+  { x: 9, y: 1 },                           // 9, 1
+  { x: 5, y: 5 },                           // 5, 5
+  { x: 9, y: 7 },                           // 9, 7
+  { x: 11, y: MAP_HEIGHT - 2 },             // 11, 11
+  { x: 11, y: 3 },                          // 11, 3
+  { x: 3, y: 9 },                           // 3, 9
+  { x: 7, y: 9 },                           // 7, 9
+  { x: 7, y: 3 },                           // 7, 3
+  { x: 9, y: 5 },                           // 9, 5
+  { x: 5, y: 7 },                           // 5, 7
+  { x: 3, y: 5 },                           // 3, 5
+  { x: 11, y: 7 },                          // 11, 7
+  { x: 9, y: 9 },                           // 9, 9
+  { x: 5, y: 3 },                           // 5, 3
+  { x: 9, y: 3 },                           // 9, 3
+  { x: 3, y: 7 },                           // 3, 7
+];
+
+function getSpawnPoints(count: number): Point[] {
+  const result: Point[] = [];
+  const used = new Set<string>();
+
+  for (const p of BASE_SPAWN_POINTS) {
+    if (result.length >= count) break;
+    const key = `${p.x},${p.y}`;
+    if (!used.has(key)) {
+      used.add(key);
+      result.push(p);
+    }
+  }
+
+  if (result.length < count) {
+    for (let y = 1; y < MAP_HEIGHT - 1; y += 2) {
+      for (let x = 1; x < MAP_WIDTH - 1; x += 2) {
+        if (result.length >= count) break;
+        if (x + y <= 4) continue;
+        const key = `${x},${y}`;
+        if (!used.has(key)) {
+          used.add(key);
+          result.push({ x, y });
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+export function spawnEnemies(grid: Grid, level: number = 1): Enemy[] {
+  const count = getSlimeCount(level);
+  const spawns = getSpawnPoints(count);
+
+  return spawns.map((p, index) => {
     for (const d of [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
       const x = p.x + d.x;
       const y = p.y + d.y;
       if (grid[y]?.[x] === CellType.BLOCK) grid[y][x] = CellType.EMPTY;
     }
+
+    const sprite = index % 7;
+    const patrolDirection =
+      p.x > 7 ? { x: -1, y: 0 } : p.y > 6 ? { x: 0, y: -1 } : { x: 1, y: 0 };
+
     return {
-      x: p.x * TILE_SIZE, y: p.y * TILE_SIZE,
-      startX: p.x * TILE_SIZE, startY: p.y * TILE_SIZE,
-      sprite, facing: -1, lastDx: 0, animTimer: 0, invulnerableTimer: 0,
-      moveTimer: 1, moveInterval: 0.45,
+      x: p.x * TILE_SIZE,
+      y: p.y * TILE_SIZE,
+      startX: p.x * TILE_SIZE,
+      startY: p.y * TILE_SIZE,
+      sprite,
+      facing: -1,
+      lastDx: 0,
+      animTimer: 0,
+      invulnerableTimer: 0,
+      moveTimer: 1,
+      moveInterval: 0.45,
       mode: 'patrol',
-      patrolDirection: sprite === 1 ? { x: 0, y: -1 } : { x: -1, y: 0 },
+      patrolDirection,
       currentPath: [],
       visitedCells: [],
       nodesExpanded: 0,
@@ -96,6 +169,10 @@ export function updateEnemies(enemies: Enemy[], grid: Grid, player: Point, bombs
       const goals = blocked.has(tileKey(goal)) ? getNeighbors(grid, goal.x, goal.y) : [goal];
       if (goals.some((p) => p.x === start.x && p.y === start.y)) {
         enemy.currentPath = [];
+        enemy.visitedCells = [];
+        enemy.exploredEdges = [];
+        enemy.nodesExpanded = 0;
+        enemy.searchTimeMs = 0;
         continue;
       }
       const results = goals
@@ -114,11 +191,15 @@ export function updateEnemies(enemies: Enemy[], grid: Grid, player: Point, bombs
         enemy.currentPath = [];
         enemy.visitedCells = [];
         enemy.exploredEdges = [];
+        enemy.nodesExpanded = 0;
+        enemy.searchTimeMs = 0;
       }
     } else {
       enemy.currentPath = [];
       enemy.visitedCells = [];
       enemy.exploredEdges = [];
+      enemy.nodesExpanded = 0;
+      enemy.searchTimeMs = 0;
     }
     next ??= patrolStep(enemy, grid, start, blocked);
     if (!next) continue;

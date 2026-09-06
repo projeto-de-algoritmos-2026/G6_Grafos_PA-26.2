@@ -470,71 +470,105 @@ export function renderGraphOverlay(
   }
 
   const enemyColors = [
-    { main: 'rgba(34, 197, 94, 0.90)' },
-    { main: 'rgba(244, 63, 94, 0.90)' },
-    { main: 'rgba(6, 182, 212, 0.90)' },
+    {
+      main: 'rgba(34, 197, 94, 0.90)',
+      translucent: 'rgba(34, 197, 94, 0.22)',
+      corner: 'rgba(34, 197, 94, 0.95)',
+    },
+    {
+      main: 'rgba(244, 63, 94, 0.90)',
+      translucent: 'rgba(244, 63, 94, 0.22)',
+      corner: 'rgba(244, 63, 94, 0.95)',
+    },
+    {
+      main: 'rgba(6, 182, 212, 0.90)',
+      translucent: 'rgba(6, 182, 212, 0.22)',
+      corner: 'rgba(6, 182, 212, 0.95)',
+    },
+    {
+      main: 'rgba(192, 38, 211, 0.90)',
+      translucent: 'rgba(192, 38, 211, 0.22)',
+      corner: 'rgba(192, 38, 211, 0.95)',
+    },
+    {
+      main: 'rgba(99, 102, 241, 0.90)',
+      translucent: 'rgba(99, 102, 241, 0.22)',
+      corner: 'rgba(99, 102, 241, 0.95)',
+    },
+    {
+      main: 'rgba(234, 179, 8, 0.90)',
+      translucent: 'rgba(234, 179, 8, 0.22)',
+      corner: 'rgba(234, 179, 8, 0.95)',
+    },
+    {
+      main: 'rgba(249, 115, 22, 0.90)',
+      translucent: 'rgba(249, 115, 22, 0.22)',
+      corner: 'rgba(249, 115, 22, 0.95)',
+    },
   ];
 
-  function edgeKey(p1: Point, p2: Point): string {
-    const k1 = `${p1.x},${p1.y}`;
-    const k2 = `${p2.x},${p2.y}`;
-    return k1 < k2 ? `${k1}<->${k2}` : `${k2}<->${k1}`;
-  }
-
-  const routeNodes = new Map<string, string>();
-  const routeEdges = new Set<string>();
+  const routeNodes = new Set<string>();
 
   for (const enemy of enemies) {
     if (!enemy.currentPath || enemy.currentPath.length === 0) continue;
-    const colors = enemyColors[enemy.sprite % enemyColors.length];
     const enemyTileX = Math.round(enemy.x / TILE_SIZE);
     const enemyTileY = Math.round(enemy.y / TILE_SIZE);
-    const fullRoute = [{ x: enemyTileX, y: enemyTileY }, ...enemy.currentPath];
-
+    routeNodes.add(`${enemyTileX},${enemyTileY}`);
     for (const p of enemy.currentPath) {
-      routeNodes.set(`${p.x},${p.y}`, colors.main);
-    }
-    for (let i = 0; i < fullRoute.length - 1; i++) {
-      routeEdges.add(edgeKey(fullRoute[i], fullRoute[i + 1]));
+      routeNodes.add(`${p.x},${p.y}`);
     }
   }
 
-  const visitedNodes = new Set<string>();
-  const exploredEdgesOutsideRoute: { from: Point; to: Point }[] = [];
-  const drawnExploredEdges = new Set<string>();
+  function drawCornerL(
+    ctx: CanvasRenderingContext2D,
+    tx: number,
+    ty: number,
+    color: string
+  ): void {
+    ctx.fillStyle = color;
+    const pad = 3;
+    const arm = 9;
+    const th = 3;
+
+    // Canto Superior Esquerdo (┌)
+    ctx.fillRect(tx + pad, ty + pad, arm, th);
+    ctx.fillRect(tx + pad, ty + pad, th, arm);
+
+    // Canto Superior Direito (┐)
+    ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + pad, arm, th);
+    ctx.fillRect(tx + TILE_SIZE - pad - th, ty + pad, th, arm);
+
+    // Canto Inferior Esquerdo (└)
+    ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - th, arm, th);
+    ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - arm, th, arm);
+
+    // Canto Inferior Direito (┘)
+    ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + TILE_SIZE - pad - th, arm, th);
+    ctx.fillRect(tx + TILE_SIZE - pad - th, ty + TILE_SIZE - pad - arm, th, arm);
+  }
 
   for (const enemy of enemies) {
-    if (enemy.visitedCells) {
-      for (const cell of enemy.visitedCells) {
-        const key = `${cell.x},${cell.y}`;
-        if (!routeNodes.has(key)) {
-          visitedNodes.add(key);
-        }
-      }
-    }
-    if (enemy.exploredEdges) {
-      for (const edge of enemy.exploredEdges) {
-        const ek = edgeKey(edge.from, edge.to);
-        if (!routeEdges.has(ek) && !drawnExploredEdges.has(ek)) {
-          drawnExploredEdges.add(ek);
-          exploredEdgesOutsideRoute.push(edge);
-        }
-      }
-    }
-  }
+    if (!enemy.visitedCells || enemy.visitedCells.length === 0) continue;
+    const colors = enemyColors[enemy.sprite % enemyColors.length];
+    const drawnSet = new Set<string>();
 
-  ctx.fillStyle = 'rgba(250, 204, 21, 0.70)';
-  for (const edge of exploredEdgesOutsideRoute) {
-    const p1 = edge.from;
-    const p2 = edge.to;
-    if (p1.x === p2.x) {
-      const minY = Math.min(p1.y, p2.y) * TILE_SIZE + 24 + 6;
-      const maxY = Math.max(p1.y, p2.y) * TILE_SIZE + 24 - 6;
-      ctx.fillRect(p1.x * TILE_SIZE + 21, minY, 6, maxY - minY);
-    } else if (p1.y === p2.y) {
-      const minX = Math.min(p1.x, p2.x) * TILE_SIZE + 24 + 6;
-      const maxX = Math.max(p1.x, p2.x) * TILE_SIZE + 24 - 6;
-      ctx.fillRect(minX, p1.y * TILE_SIZE + 21, maxX - minX, 6);
+    const allCells = [
+      ...enemy.visitedCells,
+      ...(enemy.currentPath ?? []),
+    ];
+
+    for (const cell of allCells) {
+      const key = `${cell.x},${cell.y}`;
+      if (drawnSet.has(key)) continue;
+      drawnSet.add(key);
+
+      const tx = cell.x * TILE_SIZE;
+      const ty = cell.y * TILE_SIZE;
+
+      ctx.fillStyle = colors.translucent;
+      ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+
+      drawCornerL(ctx, tx, ty, colors.corner);
     }
   }
 
@@ -542,22 +576,15 @@ export function renderGraphOverlay(
     for (let x = 0; x < MAP_WIDTH; x++) {
       if (grid[y][x] !== CellType.EMPTY) continue;
       const key = `${x},${y}`;
+      if (routeNodes.has(key)) continue;
+
       const cx = x * TILE_SIZE + 24;
       const cy = y * TILE_SIZE + 24;
 
-      if (routeNodes.has(key)) {
-        continue;
-      } else if (visitedNodes.has(key)) {
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
-        ctx.fillRect(cx - 6, cy - 6, 12, 12);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
-        ctx.fillRect(cx - 3, cy - 3, 6, 6);
-      } else {
-        ctx.fillStyle = graphColor;
-        ctx.fillRect(cx - 6, cy - 6, 12, 12);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillRect(cx - 3, cy - 3, 6, 6);
-      }
+      ctx.fillStyle = graphColor;
+      ctx.fillRect(cx - 6, cy - 6, 12, 12);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillRect(cx - 3, cy - 3, 6, 6);
     }
   }
 

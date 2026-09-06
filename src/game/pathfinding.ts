@@ -4,37 +4,21 @@ import type { PathResult } from './types';
 
 export const tileKey = (p: Point): string => `${p.x},${p.y}`;
 
-export function findPath(
+function aStarSearch(
   grid: Grid,
   start: Point,
   goal: Point,
-  blocked = new Set<string>()
-): PathResult {
-  const startTime = performance.now();
+  blocked: Set<string>
+): { path: Point[]; visited: Point[]; exploredEdges: PathResult['exploredEdges']; nodesExpanded: number } {
   const startKey = tileKey(start);
   const goalKey = tileKey(goal);
-
-  if (
-    grid[start.y]?.[start.x] !== CellType.EMPTY ||
-    grid[goal.y]?.[goal.x] !== CellType.EMPTY ||
-    blocked.has(goalKey)
-  ) {
-    return {
-      path: [],
-      visited: [],
-      exploredEdges: [],
-      nodesExpanded: 0,
-      timeMs: performance.now() - startTime,
-    };
-  }
-
   const heuristic = (p: Point) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
   const open = new Map<string, Point>([[startKey, start]]);
   const costs = new Map<string, number>([[startKey, 0]]);
   const parents = new Map<string, Point>();
   const closed = new Set<string>();
   const visited: Point[] = [];
-  const exploredEdges: { from: Point; to: Point }[] = [];
+  const exploredEdges: PathResult['exploredEdges'] = [];
 
   while (open.size > 0) {
     let current = open.values().next().value!;
@@ -66,7 +50,6 @@ export function findPath(
         visited,
         exploredEdges,
         nodesExpanded: closed.size + 1,
-        timeMs: performance.now() - startTime,
       };
     }
 
@@ -89,6 +72,43 @@ export function findPath(
     visited,
     exploredEdges,
     nodesExpanded: closed.size,
-    timeMs: performance.now() - startTime,
+  };
+}
+
+export function findPath(
+  grid: Grid,
+  start: Point,
+  goal: Point,
+  blocked = new Set<string>()
+): PathResult {
+  const startKey = tileKey(start);
+  const goalKey = tileKey(goal);
+
+  if (
+    grid[start.y]?.[start.x] !== CellType.EMPTY ||
+    grid[goal.y]?.[goal.x] !== CellType.EMPTY ||
+    blocked.has(goalKey)
+  ) {
+    return {
+      path: [],
+      visited: [],
+      exploredEdges: [],
+      nodesExpanded: 0,
+      timeMs: 0,
+    };
+  }
+
+  const ITERS = 20;
+  const t0 = performance.now();
+  const res = aStarSearch(grid, start, goal, blocked);
+  for (let i = 1; i < ITERS; i++) {
+    aStarSearch(grid, start, goal, blocked);
+  }
+  const t1 = performance.now();
+  const timeMs = Math.max(0.01, (t1 - t0) / ITERS);
+
+  return {
+    ...res,
+    timeMs,
   };
 }

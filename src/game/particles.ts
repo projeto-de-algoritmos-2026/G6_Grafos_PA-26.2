@@ -142,6 +142,10 @@ const ENEMY_PARTICLE_COLORS: Record<number, string[]> = {
   0: ['#4ade80', '#22c55e', '#16a34a', '#86efac', '#a3e635', '#bef264', '#d9f99d', '#ffffff'],
   1: ['#f43f5e', '#fb7185', '#fda4af', '#f472b6', '#e11d48', '#be123c', '#ffe4e6', '#ffffff'],
   2: ['#38bdf8', '#06b6d4', '#67e8f9', '#0ea5e9', '#a5f3fc', '#0284c7', '#e0f2fe', '#ffffff'],
+  3: ['#c084fc', '#a855f7', '#d946ef', '#e879f9', '#9333ea', '#f0abfc', '#fae8ff', '#ffffff'],
+  4: ['#818cf8', '#6366f1', '#4f46e5', '#a5b4fc', '#3b82f6', '#c7d2fe', '#e0e7ff', '#ffffff'],
+  5: ['#facc15', '#eab308', '#ca8a04', '#fde047', '#fef08a', '#a16207', '#fefce8', '#ffffff'],
+  6: ['#fb923c', '#f97316', '#ea580c', '#fdba74', '#fed7aa', '#c2410c', '#fff7ed', '#ffffff'],
 };
 
 const DEFAULT_ENEMY_COLORS = ['#c084fc', '#a855f7', '#e879f9', '#f0abfc', '#ffffff'];
@@ -152,7 +156,7 @@ export function spawnEnemyDeathParticles(
   cy: number,
   spriteIndex: number
 ): void {
-  const colors = ENEMY_PARTICLE_COLORS[spriteIndex] ?? DEFAULT_ENEMY_COLORS;
+  const colors = ENEMY_PARTICLE_COLORS[spriteIndex % 7] ?? DEFAULT_ENEMY_COLORS;
   const count = 54;
 
   for (let i = 0; i < count; i++) {

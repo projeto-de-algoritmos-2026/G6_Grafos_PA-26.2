@@ -31,6 +31,7 @@
       graphStats = stats;
     };
     engine.start();
+    (window as any).__engine = engine;
     return () => engine?.destroy();
   });
 
@@ -45,9 +46,9 @@
   }
 
   function handleRestart() {
-    gameState = "playing";
+    gameState = "menu";
     gameOverStats = null;
-    engine?.restart();
+    engine?.resetToMenu();
   }
 </script>
 
@@ -196,7 +197,8 @@
   }
 
   .modal-sep {
-    color: #475569;
+    color: var(--theme-color, #facc15);
+    transition: color 0.4s ease;
   }
 
   .modal-close-btn {
