@@ -6,6 +6,10 @@
   import GameOver from "./GameOver.svelte";
   import type { GameOverStats, GraphMetricsStats } from "./game/types";
 
+  import fireIcon from '../assets/fire1.png';
+  import bootsIcon from '../assets/winged-boot1.png';
+  let upgrades = $state({ fire: 0, boots: 0 });
+
   type GameState = "menu" | "starting" | "playing" | "gameover";
 
   let canvas: HTMLCanvasElement;
@@ -30,6 +34,7 @@
     engine.onGraphStatsUpdate = (stats) => {
       graphStats = stats;
     };
+    engine.onUpgradesChange = (timers) => { upgrades = timers; };
     engine.start();
     return () => engine?.destroy();
   });
@@ -62,6 +67,19 @@
       bind:this={canvas}
       class:is-blurred={gameState === "menu" || gameState === "gameover"}
     ></canvas>
+
+    {#if gameState === "playing"}
+      <aside class="upgrades" aria-label="Upgrades ativos">
+        {#each [{ kind: 'fire' as const, icon: fireIcon, label: 'Fogo' }, { kind: 'boots' as const, icon: bootsIcon, label: 'Botas aladas' }] as upgrade}
+          {#if upgrades[upgrade.kind] > 0}
+            <div class="upgrade" title={upgrade.label}>
+              <img src={upgrade.icon} alt={upgrade.label} />
+              <span>{upgrades[upgrade.kind].toFixed(1)}s</span>
+            </div>
+          {/if}
+        {/each}
+      </aside>
+    {/if}
 
     {#if graphStats?.show && gameState === "playing"}
       <div
@@ -99,6 +117,11 @@
 </main>
 
 <style>
+  .upgrades { position: absolute; left: calc(100% + 12px); top: 48px; z-index: 2; display: grid; gap: 16px; }
+  .upgrade { display: grid; justify-items: center; color: white; font-family: monospace; }
+  .upgrade img { width: 48px; height: 48px; image-rendering: pixelated; animation: upgrade-blink 0.5s steps(1) infinite; }
+  @keyframes upgrade-blink { 50% { opacity: 0.2; } }
+
   main {
     position: relative;
     display: flex;

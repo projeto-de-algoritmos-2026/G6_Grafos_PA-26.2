@@ -1,3 +1,9 @@
+import fire1 from '../../assets/fire1.png';
+import fire2 from '../../assets/fire2.png';
+import fire3 from '../../assets/fire3.png';
+import boots1 from '../../assets/winged-boot1.png';
+import boots2 from '../../assets/winged-boot2.png';
+import boots3 from '../../assets/winged-boot3.png';
 import banditSprite from '../../assets/Bandit.png';
 import closedSprite from '../../assets/closed.png';
 import openSprite from '../../assets/open.png';
@@ -26,6 +32,7 @@ function createImg(src: string): HTMLImageElement {
 
 export function loadGameSprites(): GameSprites {
   return {
+    upgrades: { fire: [fire1, fire2, fire3].map(createImg), boots: [boots1, boots2, boots3].map(createImg) },
     exit: createImg(closedSprite),
     exitOpen: createImg(openSprite),
     enemies: [enemy1Sprite, enemy2Sprite, enemy3Sprite].map(createImg),

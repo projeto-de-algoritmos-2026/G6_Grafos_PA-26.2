@@ -223,6 +223,7 @@ export function renderPlayer(
     startX: number;
     startY: number;
     animTimer: number;
+    moveDuration?: number;
     lastDx: number;
     facing: number;
     invulnerableTimer: number;
@@ -312,8 +313,8 @@ export function renderPlayer(
       scaleY = 1;
     }
   } else if (player.animTimer > 0) {
-    const total = 0.14;
-    const hopDuration = 0.085;
+    const total = player.moveDuration ?? 0.14;
+    const hopDuration = total * (0.085 / 0.14);
     const t = 1 - player.animTimer / total;
 
     if (t < hopDuration / total) {
