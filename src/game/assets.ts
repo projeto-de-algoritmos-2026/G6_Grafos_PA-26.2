@@ -1,4 +1,9 @@
 import banditSprite from '../../assets/Bandit.png';
+import exitSprite from '../../assets/exit1.png';
+import exitOpenSprite from '../../assets/exit2.png';
+import enemy1Sprite from '../../assets/Enemy1.png';
+import enemy2Sprite from '../../assets/Enemy2.png';
+import enemy3Sprite from '../../assets/Enemy3.png';
 import bombSprite from '../../assets/Bomb.png';
 import bombExplodingSprite from '../../assets/BombExploding.png';
 import wallSprite from '../../assets/Walls.png';
@@ -21,6 +26,9 @@ function createImg(src: string): HTMLImageElement {
 
 export function loadGameSprites(): GameSprites {
   return {
+    exit: createImg(exitSprite),
+    exitOpen: createImg(exitOpenSprite),
+    enemies: [enemy1Sprite, enemy2Sprite, enemy3Sprite].map(createImg),
     bandit: createImg(banditSprite),
     bomb: createImg(bombSprite),
     bombExploding: createImg(bombExplodingSprite),
