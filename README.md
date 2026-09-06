@@ -25,6 +25,12 @@ Build de produção:
 npm run build
 ```
 
+Deploy no GitHub Pages:
+
+```bash
+npm run deploy
+```
+
 ## Mapas
 
 O mapa mantém a grade clássica de pilares indestrutíveis, com blocos destrutíveis
