@@ -1,4 +1,4 @@
-import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid } from './constants';
+import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import type { Bomb, Explosion, GameSprites } from './types';
 
 export function renderHud(
@@ -6,16 +6,44 @@ export function renderHud(
   sprites: GameSprites,
   health: number,
   maxHealth: number,
-  canvasWidth: number
+  canvasWidth: number,
+  level: number,
+  enemyCount: number,
+  exitRevealed: boolean
 ): void {
   const heartSize = TILE_SIZE;
   const startX = (canvasWidth - maxHealth * heartSize) / 2;
   const startY = (HUD_HEIGHT - heartSize) / 2;
 
+  ctx.save();
+  ctx.font = 'bold 16px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillText(`NÍVEL ${level}`, 16, 16);
+  ctx.font = '12px monospace';
+  ctx.fillText(`Inimigos: ${enemyCount}`, 16, 35);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = enemyCount === 0 && exitRevealed ? '#86efac' : '#e2e8f0';
+  const status = !exitRevealed ? 'Encontre a saída oculta' :
+    enemyCount > 0 ? 'Elimine os inimigos' : 'Entre na saída!';
+  ctx.fillText(status, canvasWidth - 16, HUD_HEIGHT / 2);
+  ctx.restore();
+
   for (let i = 0; i < maxHealth; i++) {
     const img = i < health ? sprites.healthFull : sprites.healthEmpty;
     ctx.drawImage(img, startX + i * heartSize, startY, heartSize, heartSize);
   }
+}
+
+export function renderExit(
+  ctx: CanvasRenderingContext2D,
+  exit: Point,
+  sprite: HTMLImageElement
+): void {
+  ctx.save();
+  ctx.translate(exit.x * TILE_SIZE, exit.y * TILE_SIZE);
+  ctx.drawImage(sprite, 0, 0, TILE_SIZE, TILE_SIZE);
+  ctx.restore();
 }
 
 export function renderMap(

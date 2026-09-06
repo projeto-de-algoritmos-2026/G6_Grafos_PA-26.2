@@ -1,9 +1,12 @@
 import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { generateMap } from './map';
+import { canLeaveLevel, hideExit, isExitRevealed } from './level';
+import { isInExplosion, spawnEnemies, updateEnemies } from './enemies';
 import { loadGameSprites } from './assets';
 import {
   renderBombs,
   renderExplosions,
+  renderExit,
   renderHud,
   renderMap,
   renderPlayer,
@@ -18,12 +21,14 @@ import {
   updateScorchMarks,
 } from './particles';
 import bombSprite from '../../assets/Bomb.png';
-import type { Bomb, Explosion, GameOverStats, GameSprites, Particle, ScorchMark } from './types';
+import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, Particle, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
   private grid: Grid;
   private sprites: GameSprites;
+  private exit: Point;
+  private level = 1;
 
   // Player state
   x = TILE_SIZE;
@@ -48,6 +53,7 @@ export class GameEngine {
 
   // Entities and visual effects
   private bombs: Bomb[] = [];
+  private enemies: Enemy[] = [];
   private explosions: Explosion[] = [];
   private particles: Particle[] = [];
   private scorchMarks: ScorchMark[] = [];
@@ -64,6 +70,8 @@ export class GameEngine {
 
     this.sprites = loadGameSprites();
     this.grid = generateMap();
+    this.enemies = spawnEnemies(this.grid);
+    this.exit = hideExit(this.grid);
   }
 
   start(): void {
@@ -123,7 +131,8 @@ export class GameEngine {
 
       const isBlocked =
         this.grid[pushTileY]?.[pushTileX] !== CellType.EMPTY ||
-        this.bombs.some((b) => b !== bomb && b.x === pushX && b.y === pushY);
+        this.bombs.some((b) => b !== bomb && b.x === pushX && b.y === pushY) ||
+        this.enemies.some((enemy) => enemy.x === pushX && enemy.y === pushY);
 
       if (isBlocked) {
         bomb.resistTimer = 0.12;
@@ -161,6 +170,7 @@ export class GameEngine {
     if (dx !== 0) this.facing = dx;
 
     spawnDust(this.particles, prevX + TILE_SIZE / 2, prevY + TILE_SIZE - 4, dx, dy, 4, 20);
+    this.checkEnemyContact();
   }
 
   private spawnBomb(): void {
@@ -241,12 +251,20 @@ export class GameEngine {
   public restart(): void {
     this.isGameOver = false;
     this.isPlaying = true;
+    this.level = 1;
     this.health = this.maxHealth;
+    this.loadLevel();
+  }
+
+  private loadLevel(): void {
     this.x = TILE_SIZE;
     this.y = TILE_SIZE;
     this.startX = TILE_SIZE;
     this.startY = TILE_SIZE;
     this.animTimer = 0;
+    this.lastDx = 0;
+    this.lastDy = 0;
+    this.facing = 1;
     this.invulnerableTimer = 0;
     this.shakeTrauma = 0;
     this.bombsPlacedCount = 0;
@@ -257,6 +275,20 @@ export class GameEngine {
     this.particles = [];
     this.scorchMarks = [];
     this.grid = generateMap();
+    this.enemies = spawnEnemies(this.grid);
+    this.exit = hideExit(this.grid);
+  }
+
+  private checkEnemyContact(): void {
+    if (this.enemies.some((enemy) => enemy.x === this.x && enemy.y === this.y)) this.takeDamage();
+  }
+
+  private removeExplodedEnemies(): void {
+    this.enemies = this.enemies.filter((enemy) => {
+      if (!isInExplosion(enemy, this.explosions)) return true;
+      spawnExplosionDebris(this.particles, enemy.x / TILE_SIZE, enemy.y / TILE_SIZE);
+      return false;
+    });
   }
 
   private tick = (now: number) => {
@@ -330,6 +362,12 @@ export class GameEngine {
       }
     }
 
+    this.removeExplodedEnemies();
+    this.checkEnemyContact();
+    updateEnemies(this.enemies, this.grid, this, this.bombs, dt);
+    this.removeExplodedEnemies();
+    this.checkEnemyContact();
+
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const exp = this.explosions[i];
       exp.timer -= dt;
@@ -348,12 +386,22 @@ export class GameEngine {
         }
       }
     }
+    this.tryNextLevel();
+  }
+
+  private tryNextLevel(): void {
+    // Finish the arrival animation and let flames expire before changing maps.
+    if (this.animTimer > 0 || isInExplosion(this, this.explosions)) return;
+    if (!canLeaveLevel(this.grid, this.exit, this, this.enemies.length)) return;
+    this.level++;
+    this.loadLevel();
   }
 
   private render(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width);
+    renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width,
+      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit));
 
     const shake = Math.pow(this.shakeTrauma, 2) * 5;
     const shakeX = (Math.random() * 2 - 1) * shake;
@@ -364,9 +412,15 @@ export class GameEngine {
 
     renderMap(this.ctx, this.grid, this.sprites);
     renderScorchMarks(this.ctx, this.scorchMarks);
+    if (isExitRevealed(this.grid, this.exit)) {
+      renderExit(this.ctx, this.exit, this.enemies.length === 0 ? this.sprites.exitOpen : this.sprites.exit);
+    }
     renderExplosions(this.ctx, this.explosions, this.sprites);
     renderBombs(this.ctx, this.bombs, this.sprites, this.lastTime);
     renderParticles(this.ctx, this.particles);
+    for (const enemy of this.enemies) {
+      renderPlayer(this.ctx, enemy, this.sprites.enemies[enemy.sprite], this.lastTime);
+    }
     renderPlayer(this.ctx, this, this.sprites.bandit, this.lastTime);
 
     this.ctx.restore();
