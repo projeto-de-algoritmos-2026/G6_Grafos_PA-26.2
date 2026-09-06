@@ -40,6 +40,8 @@ export interface ScorchMark {
 }
 
 export interface GameSprites {
+  exit: HTMLImageElement;
+  exitOpen: HTMLImageElement;
   enemies: HTMLImageElement[];
   bandit: HTMLImageElement;
   bomb: HTMLImageElement;

@@ -35,31 +35,14 @@ export function renderHud(
   }
 }
 
-// A pixel-art door drawn on the canvas; no exit sprite exists in the asset set.
-export function renderExit(ctx: CanvasRenderingContext2D, exit: Point, unlocked: boolean): void {
+export function renderExit(
+  ctx: CanvasRenderingContext2D,
+  exit: Point,
+  sprite: HTMLImageElement
+): void {
   ctx.save();
   ctx.translate(exit.x * TILE_SIZE, exit.y * TILE_SIZE);
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(6, 4, 36, 40);
-  ctx.fillStyle = unlocked ? '#86efac' : '#94a3b8';
-  ctx.fillRect(10, 4, 28, 4);
-  ctx.fillRect(6, 8, 4, 32);
-  ctx.fillRect(38, 8, 4, 32);
-  ctx.fillStyle = unlocked ? '#14532d' : '#78350f';
-  ctx.fillRect(12, 10, 24, 30);
-  ctx.fillStyle = unlocked ? '#bbf7d0' : '#fbbf24';
-  if (unlocked) {
-    ctx.fillRect(22, 16, 4, 18);
-    ctx.fillRect(18, 20, 12, 4);
-    ctx.fillRect(20, 18, 8, 4);
-  } else {
-    ctx.fillRect(20, 21, 8, 10);
-    ctx.fillRect(20, 17, 2, 6);
-    ctx.fillRect(26, 17, 2, 6);
-    ctx.fillRect(22, 15, 4, 2);
-  }
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillRect(6, 40, 36, 4);
+  ctx.drawImage(sprite, 0, 0, TILE_SIZE, TILE_SIZE);
   ctx.restore();
 }
 

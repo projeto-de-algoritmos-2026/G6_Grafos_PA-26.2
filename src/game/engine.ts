@@ -373,7 +373,7 @@ export class GameEngine {
     renderMap(this.ctx, this.grid, this.sprites);
     renderScorchMarks(this.ctx, this.scorchMarks);
     if (isExitRevealed(this.grid, this.exit)) {
-      renderExit(this.ctx, this.exit, this.enemies.length === 0);
+      renderExit(this.ctx, this.exit, this.enemies.length === 0 ? this.sprites.exitOpen : this.sprites.exit);
     }
     renderExplosions(this.ctx, this.explosions, this.sprites);
     renderBombs(this.ctx, this.bombs, this.sprites, this.lastTime);

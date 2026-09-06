@@ -39,7 +39,8 @@ a densidade de 45% é um ajuste próprio de jogabilidade, não uma reprodução 
 
 Cada mapa tem uma saída escondida sob um bloco destrutível aleatório. Destrua o
 bloco com uma bomba para revelar a porta e elimine os três inimigos para abri-la.
-A porta fechada tem um cadeado; a aberta fica verde com uma seta.
+A porta usa `assets/exit1.png` enquanto bloqueada e `assets/exit2.png`, com a seta,
+quando liberada.
 
 Entre na porta aberta para avançar ao próximo nível. O mapa é gerado novamente,
 com novos inimigos e outra saída oculta, preservando os corações restantes.
