@@ -41,6 +41,7 @@ export class GameEngine {
   // Game over state & statistics
   public onGameOver?: (stats: GameOverStats) => void;
   public isGameOver = false;
+  public isPlaying = false;
   private startTime = 0;
   private bombsPlacedCount = 0;
   private blocksDestroyedCount = 0;
@@ -72,13 +73,19 @@ export class GameEngine {
     this.rafId = requestAnimationFrame(this.tick);
   }
 
+  startPlay(): void {
+    this.isPlaying = true;
+    this.isGameOver = false;
+    this.startTime = performance.now();
+  }
+
   destroy(): void {
     cancelAnimationFrame(this.rafId);
     window.removeEventListener('keydown', this.onKeyDown);
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (this.isGameOver) return;
+    if (!this.isPlaying || this.isGameOver) return;
 
     let dx = 0;
     let dy = 0;
@@ -233,6 +240,7 @@ export class GameEngine {
 
   public restart(): void {
     this.isGameOver = false;
+    this.isPlaying = true;
     this.health = this.maxHealth;
     this.x = TILE_SIZE;
     this.y = TILE_SIZE;
