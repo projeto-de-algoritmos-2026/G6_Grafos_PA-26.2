@@ -31,7 +31,6 @@
       graphStats = stats;
     };
     engine.start();
-    (window as any).__engine = engine;
     return () => engine?.destroy();
   });
 
@@ -70,20 +69,13 @@
         style="--theme-color: {themeColor};"
       >
         <div class="modal-info">
-          <span class="modal-tag">[G] GRAFO & A*</span>
-          <span class="modal-stat">NÓS EXPANDIDOS: <strong>{graphStats.totalExpanded}</strong></span>
+          <span class="modal-tag">[G] {graphStats.algorithmName}</span>
+          <span class="modal-stat">EXPANDIDOS: <strong>{graphStats.totalExpanded}</strong></span>
           <span class="modal-sep">|</span>
           <span class="modal-stat">TEMPO: <strong>{graphStats.maxTime.toFixed(2)}ms</strong></span>
           <span class="modal-sep">|</span>
           <span class="modal-stat">ROTA: <strong>{graphStats.pathLenStr}</strong></span>
         </div>
-        <button
-          class="modal-close-btn"
-          onclick={() => engine?.toggleGraphOverlay()}
-          type="button"
-        >
-          [G] OCULTAR
-        </button>
       </div>
     {/if}
   </div>
@@ -150,7 +142,7 @@
     width: 720px;
     box-sizing: border-box;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     padding: 0 4px;
     background: transparent;
@@ -198,22 +190,5 @@
   .modal-sep {
     color: var(--theme-color, #facc15);
     transition: color 0.4s ease;
-  }
-
-  .modal-close-btn {
-    background: transparent;
-    border: none;
-    color: #94a3b8;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 2px 4px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
-    transition: color 0.2s ease;
-  }
-
-  .modal-close-btn:hover {
-    color: var(--theme-color, #ffffff);
   }
 </style>

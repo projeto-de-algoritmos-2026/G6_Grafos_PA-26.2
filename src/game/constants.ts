@@ -17,7 +17,7 @@ export interface Point {
   x: number;
   y: number;
 }
-// Sequência: Amarelo (0°) -> Laranja (340°) -> Vermelho (310°) -> Roxo (240°) -> Azul (175°) -> Ciano (130°) -> Verde (70°)
+
 export const RAINBOW_HUE_OFFSETS = [0, 340, 310, 240, 175, 130, 70];
 
 export function getLevelHueOffset(level: number): number {

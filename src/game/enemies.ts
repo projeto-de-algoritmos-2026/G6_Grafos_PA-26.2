@@ -1,7 +1,7 @@
 import { CellType, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { getNeighbors } from './map';
 import { findPath, tileKey } from './pathfinding';
-import type { Bomb, Enemy, Explosion } from './types';
+import type { Bomb, Enemy, Explosion, PathAlgorithm, PathResult } from './types';
 
 export const CHASE_DISTANCE = 4;
 export const LOSE_INTEREST_DISTANCE = 6;
@@ -47,32 +47,32 @@ export function getSlimeCount(level: number): number {
 }
 
 const BASE_SPAWN_POINTS: Point[] = [
-  { x: MAP_WIDTH - 2, y: 1 },              // 13, 1 (Top-Right)
-  { x: 1, y: MAP_HEIGHT - 2 },              // 1, 11 (Bottom-Left)
-  { x: MAP_WIDTH - 2, y: MAP_HEIGHT - 2 },  // 13, 11 (Bottom-Right)
-  { x: 7, y: 1 },                           // 7, 1 (Top-Center)
-  { x: 7, y: MAP_HEIGHT - 2 },              // 7, 11 (Bottom-Center)
-  { x: MAP_WIDTH - 2, y: 7 },               // 13, 7 (Right-Center)
-  { x: 7, y: 5 },                           // 7, 5 (Center)
-  { x: 1, y: 7 },                           // 1, 7 (Left-Center)
-  { x: MAP_WIDTH - 2, y: 5 },               // 13, 5
-  { x: 5, y: MAP_HEIGHT - 2 },              // 5, 11
-  { x: 9, y: 1 },                           // 9, 1
-  { x: 5, y: 5 },                           // 5, 5
-  { x: 9, y: 7 },                           // 9, 7
-  { x: 11, y: MAP_HEIGHT - 2 },             // 11, 11
-  { x: 11, y: 3 },                          // 11, 3
-  { x: 3, y: 9 },                           // 3, 9
-  { x: 7, y: 9 },                           // 7, 9
-  { x: 7, y: 3 },                           // 7, 3
-  { x: 9, y: 5 },                           // 9, 5
-  { x: 5, y: 7 },                           // 5, 7
-  { x: 3, y: 5 },                           // 3, 5
-  { x: 11, y: 7 },                          // 11, 7
-  { x: 9, y: 9 },                           // 9, 9
-  { x: 5, y: 3 },                           // 5, 3
-  { x: 9, y: 3 },                           // 9, 3
-  { x: 3, y: 7 },                           // 3, 7
+  { x: MAP_WIDTH - 2, y: 1 },
+  { x: 1, y: MAP_HEIGHT - 2 },
+  { x: MAP_WIDTH - 2, y: MAP_HEIGHT - 2 },
+  { x: 7, y: 1 },
+  { x: 7, y: MAP_HEIGHT - 2 },
+  { x: MAP_WIDTH - 2, y: 7 },
+  { x: 7, y: 5 },
+  { x: 1, y: 7 },
+  { x: MAP_WIDTH - 2, y: 5 },
+  { x: 5, y: MAP_HEIGHT - 2 },
+  { x: 9, y: 1 },
+  { x: 5, y: 5 },
+  { x: 9, y: 7 },
+  { x: 11, y: MAP_HEIGHT - 2 },
+  { x: 11, y: 3 },
+  { x: 3, y: 9 },
+  { x: 7, y: 9 },
+  { x: 7, y: 3 },
+  { x: 9, y: 5 },
+  { x: 5, y: 7 },
+  { x: 3, y: 5 },
+  { x: 11, y: 7 },
+  { x: 9, y: 9 },
+  { x: 5, y: 3 },
+  { x: 9, y: 3 },
+  { x: 3, y: 7 },
 ];
 
 function getSpawnPoints(count: number): Point[] {
@@ -129,7 +129,6 @@ export function spawnEnemies(grid: Grid, level: number = 1): Enemy[] {
       facing: -1,
       lastDx: 0,
       animTimer: 0,
-      invulnerableTimer: 0,
       moveTimer: 1,
       moveInterval: 0.45,
       mode: 'patrol',
@@ -147,62 +146,86 @@ export function isInExplosion(enemy: Point, explosions: Explosion[]): boolean {
     p.x * TILE_SIZE === enemy.x && p.y * TILE_SIZE === enemy.y));
 }
 
-export function updateEnemies(enemies: Enemy[], grid: Grid, player: Point, bombs: Bomb[], dt: number): void {
+function clearEnemyPath(enemy: Enemy): void {
+  enemy.currentPath = [];
+  enemy.visitedCells = [];
+  enemy.exploredEdges = [];
+  enemy.nodesExpanded = 0;
+  enemy.searchTimeMs = 0;
+}
+
+function applyEnemyPath(enemy: Enemy, result: PathResult): void {
+  enemy.currentPath = result.path;
+  enemy.visitedCells = result.visited;
+  enemy.exploredEdges = result.exploredEdges;
+  enemy.nodesExpanded = result.nodesExpanded;
+  enemy.searchTimeMs = result.timeMs;
+}
+
+function findChaseRoute(
+  enemy: Enemy,
+  grid: Grid,
+  player: Point,
+  blocked: Set<string>,
+  algorithm: PathAlgorithm
+): PathResult | undefined {
+  const start = { x: Math.round(enemy.x / TILE_SIZE), y: Math.round(enemy.y / TILE_SIZE) };
+  const goal = { x: Math.round(player.x / TILE_SIZE), y: Math.round(player.y / TILE_SIZE) };
+  const goals = blocked.has(tileKey(goal)) ? getNeighbors(grid, goal.x, goal.y) : [goal];
+  if (goals.some((p) => p.x === start.x && p.y === start.y)) return undefined;
+
+  let best: PathResult | undefined;
+  for (const target of goals) {
+    const res = findPath(grid, start, target, blocked, algorithm);
+    if (res.path.length > 0 && (!best || res.path.length < best.path.length)) {
+      best = res;
+    }
+  }
+  return best;
+}
+
+export function updateEnemies(
+  enemies: Enemy[],
+  grid: Grid,
+  player: Point,
+  bombs: Bomb[],
+  dt: number,
+  algorithm: PathAlgorithm = 'astar'
+): void {
   const bombTiles = bombs.map((b) => tileKey({ x: b.x / TILE_SIZE, y: b.y / TILE_SIZE }));
   for (const enemy of enemies) {
     enemy.animTimer = Math.max(0, enemy.animTimer - dt);
     enemy.moveTimer = Math.max(0, enemy.moveTimer - dt);
     if (enemy.moveTimer > 0) continue;
     enemy.moveTimer = enemy.moveInterval;
+
     const blocked = new Set(bombTiles);
     for (const other of enemies) {
       if (other !== enemy) blocked.add(tileKey({ x: other.x / TILE_SIZE, y: other.y / TILE_SIZE }));
     }
-    const start = { x: enemy.x / TILE_SIZE, y: enemy.y / TILE_SIZE };
-    const goal = { x: player.x / TILE_SIZE, y: player.y / TILE_SIZE };
+
+    const start = { x: Math.round(enemy.x / TILE_SIZE), y: Math.round(enemy.y / TILE_SIZE) };
+    const goal = { x: Math.round(player.x / TILE_SIZE), y: Math.round(player.y / TILE_SIZE) };
     const distance = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y);
     if (distance <= CHASE_DISTANCE) enemy.mode = 'chase';
     else if (distance > LOSE_INTEREST_DISTANCE) enemy.mode = 'patrol';
 
     let next: Point | undefined;
     if (enemy.mode === 'chase') {
-      const goals = blocked.has(tileKey(goal)) ? getNeighbors(grid, goal.x, goal.y) : [goal];
-      if (goals.some((p) => p.x === start.x && p.y === start.y)) {
-        enemy.currentPath = [];
-        enemy.visitedCells = [];
-        enemy.exploredEdges = [];
-        enemy.nodesExpanded = 0;
-        enemy.searchTimeMs = 0;
-        continue;
-      }
-      const results = goals
-        .map((p) => findPath(grid, start, p, blocked))
-        .filter((r) => r.path.length > 0);
-      results.sort((a, b) => a.path.length - b.path.length);
-      const best = results[0];
+      const best = findChaseRoute(enemy, grid, player, blocked, algorithm);
       if (best) {
         next = best.path[0];
-        enemy.currentPath = best.path;
-        enemy.visitedCells = best.visited;
-        enemy.exploredEdges = best.exploredEdges;
-        enemy.nodesExpanded = best.nodesExpanded;
-        enemy.searchTimeMs = best.timeMs;
+        applyEnemyPath(enemy, best);
       } else {
-        enemy.currentPath = [];
-        enemy.visitedCells = [];
-        enemy.exploredEdges = [];
-        enemy.nodesExpanded = 0;
-        enemy.searchTimeMs = 0;
+        clearEnemyPath(enemy);
       }
     } else {
-      enemy.currentPath = [];
-      enemy.visitedCells = [];
-      enemy.exploredEdges = [];
-      enemy.nodesExpanded = 0;
-      enemy.searchTimeMs = 0;
+      clearEnemyPath(enemy);
     }
+
     next ??= patrolStep(enemy, grid, start, blocked);
     if (!next) continue;
+
     enemy.startX = enemy.x;
     enemy.startY = enemy.y;
     enemy.x = next.x * TILE_SIZE;
@@ -210,5 +233,26 @@ export function updateEnemies(enemies: Enemy[], grid: Grid, player: Point, bombs
     enemy.lastDx = next.x - start.x;
     if (enemy.lastDx !== 0) enemy.facing = enemy.lastDx;
     enemy.animTimer = 0.14;
+  }
+}
+
+export function recalculatePaths(
+  enemies: Enemy[],
+  grid: Grid,
+  player: Point,
+  bombs: Bomb[],
+  algorithm: PathAlgorithm
+): void {
+  const bombTiles = bombs.map((b) => tileKey({ x: b.x / TILE_SIZE, y: b.y / TILE_SIZE }));
+  for (const enemy of enemies) {
+    if (enemy.mode !== 'chase') continue;
+    const blocked = new Set(bombTiles);
+    for (const other of enemies) {
+      if (other !== enemy) blocked.add(tileKey({ x: other.x / TILE_SIZE, y: other.y / TILE_SIZE }));
+    }
+    const best = findChaseRoute(enemy, grid, player, blocked, algorithm);
+    if (best) {
+      applyEnemyPath(enemy, best);
+    }
   }
 }

@@ -71,8 +71,12 @@ export interface ExploredEdge {
   to: Point;
 }
 
+export type PathAlgorithm = 'dijkstra' | 'astar';
+
 export interface GraphMetricsStats {
   show: boolean;
+  algorithm: PathAlgorithm;
+  algorithmName: string;
   totalExpanded: number;
   maxTime: number;
   pathLenStr: string;
@@ -98,7 +102,6 @@ export interface Enemy {
   facing: number;
   lastDx: number;
   animTimer: number;
-  invulnerableTimer: number;
   moveTimer: number;
   moveInterval: number;
   currentPath?: Point[];

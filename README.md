@@ -20,9 +20,9 @@
 
 ## Sobre o Jogo
 
-Implementação de Bomberman 2D no navegador desenvolvida com Svelte 5 (Runes), TypeScript e HTML5 Canvas. O projeto une a jogabilidade arcade com aplicação prática de Teoria dos Grafos, utilizando o algoritmo A* (A-Estrela) orientado por distância de Manhattan para movimentação inteligente dos inimigos pelo labirinto.
+Implementação de Bomberman 2D no navegador desenvolvida com Svelte 5 (Runes), TypeScript e HTML5 Canvas. O projeto une a jogabilidade arcade com aplicação prática de Teoria dos Grafos, comparando os algoritmos **Dijkstra** (busca uniforme, não-informada) e **A\*** (busca informada orientada pela distância de Manhattan) para movimentação dos inimigos pelo labirinto, implementados sem bibliotecas externas.
 
-Toda a arte foi construída em Pixel Art 16×16 ampliada em 3× (células de 48 × 48 px) sem interpolação de escala (zero mixels), acompanhada de efeitos de partículas.
+Toda a arte foi construída em Pixel Art 16×16 ampliada em 3× (células de 48 × 48 px) sem interpolação de escala, acompanhada de efeitos de partículas e rotação de paleta cromática a cada fase.
 
 ---
 
@@ -32,7 +32,7 @@ Toda a arte foi construída em Pixel Art 16×16 ampliada em 3× (células de 48 
 | :--- | :--- |
 | **`W` `A` `S` `D`** ou **`Setas`** | Movimentar o Bandit pelo tabuleiro |
 | **`Espaço`** | Plantar dinamite no chão (pavio queima por 3s) |
-| **`G`** | **Ativar / desativar Modo de Inspeção de Grafos e A\*** |
+| **`G`** | **Ativar / desativar Modo de Inspeção de Grafos (Vértices, Arestas e Nós Explorados)** |
 
 ---
 
@@ -42,9 +42,9 @@ Pressionando a tecla **`G`** a qualquer momento durante a partida, o jogo ativa 
 
 - **Vértices ($V$):** Marcadores no centro de cada célula transitável.
 - **Arestas ($E$):** Conexões ortogonais ativas entre células livres vizinhas.
-- **Área de Expansão (Nós Visitados):** Trajetórias que o algoritmo explorou na busca, desenhadas como um caminho conectado em amarelo dourado.
-- **Rota Planejada:** Traçado ortogonal destacado na cor de cada monstro conectando-o até o jogador.
-- **Painel de Métricas:** Métricas em tempo real logo abaixo do labirinto exibindo quantidade de nós expandidos, tempo de execução da busca e passos da rota.
+- **Área de Expansão (Nós Visitados):** Células exploradas pelo algoritmo na busca até o jogador.
+- **Rota Planejada:** Traçado ortogonal do slime até o jogador.
+- **Painel de Métricas:** Métricas em tempo real logo abaixo do labirinto exibindo o algoritmo ativo, quantidade de nós expandidos, tempo de execução da busca e passos da rota.
 
 ---
 
@@ -56,16 +56,16 @@ O mapa mantém a grade clássica de pilares indestrutíveis com blocos destrutí
 
 ### Saída e Níveis
 
-Cada fase possui uma saída secreta oculta sob um bloco de tijolo aleatório. Destrua o bloco com uma bomba para revelar a porta e elimine os três slimes para destrancá-la (`closed.png` $\to$ `open.png`). Ao entrar na porta aberta, um vórtice pixel art transporta o jogador para o próximo nível com um novo mapa, novos inimigos e transição de cores (*hue shift*), preservando os corações restantes.
+Cada fase possui uma saída secreta oculta sob um bloco de tijolo aleatório. Destrua o bloco com uma bomba para revelar a porta e elimine todos os slimes para destrancá-la (`closed.png` $\to$ `open.png`). Ao entrar na porta aberta, o jogador avança para o próximo nível com um novo mapa, progressão na quantidade de inimigos e transição de cores do cenário, preservando a vida restante.
 
-### Inimigos e Inteligência com A*
+### Inimigos e Algoritmos de Menor Caminho (Dijkstra vs A*)
 
-Os três inimigos surgem nos cantos opostos do mapa e patrulham os corredores a cada 0,45s após uma espera inicial de 1s:
+A quantidade de slimes progride a cada fase (inicia com 3 e ganha +1 slime por nível, ciclando 7 cores distintas). As fases alternam automaticamente os algoritmos: **as fases ímpares usam Dijkstra e as fases pares usam A\***:
 
-- **Patrulha:** Longe do jogador, navegam pelo labirinto sorteando caminhos livres nas bifurcações e encruzilhadas, invertendo o sentido apenas em becos sem saída.
-- **Perseguição:** A perseguição inicia a até 4 células de distância Manhattan e termina acima de 6 células (evitando alternâncias na borda).
-- **Desvio de Obstáculos:** O $A^*$ recalcula o trajeto a cada passo, tratando paredes, tijolos, bombas e outros monstros como bloqueios temporários.
-- **Heurística de Manhattan:** $h(n) = |x_n - x_{\text{alvo}}| + |y_n - y_{\text{alvo}}|$, ótima e admissível para malha ortogonal, garantindo o menor caminho sem superestimar custos.
+- **Modelagem:** Ambos os algoritmos foram implementados em TypeScript modelando a grade como grafo ortogonal com conjuntos aberto (`open`), fechado (`closed`), custos acumulados ($g(n)$) e predecessores (`parents`).
+- **Dijkstra (Fases Ímpares):** Busca uniforme com $h(n) = 0$ ($f(n) = g(n)$). Expande nós radialmente a partir da origem cobrindo a grade até alcançar o jogador.
+- **A\* com Heurística de Manhattan (Fases Pares):** Busca informada com $f(n) = g(n) + h(n)$, onde $h(n) = |x_n - x_{\text{alvo}}| + |y_n - y_{\text{alvo}}|$. Como a distância de Manhattan é uma heurística admissível e consistente em grades ortogonais sem diagonais, o algoritmo garante a rota ótima explorando substancialmente menos vértices.
+- **Patrulha e Perseguição:** Longe do jogador, os slimes patrulham livremente; ao se aproximarem a 4 células de distância Manhattan, iniciam a perseguição recalculando o caminho a cada passo e desviando de obstáculos e bombas.
 
 ---
 

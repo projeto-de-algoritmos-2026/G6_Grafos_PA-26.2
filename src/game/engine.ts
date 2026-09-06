@@ -1,8 +1,8 @@
 import { CellType, getLevelHueOffset, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { generateMap } from './map';
 import { canLeaveLevel, hideExit, isExitRevealed } from './level';
-import { isInExplosion, spawnEnemies, updateEnemies } from './enemies';
-import { loadGameSprites } from './assets';
+import { isInExplosion, recalculatePaths, spawnEnemies, updateEnemies } from './enemies';
+import { loadGameSprites, BOMB_SPRITE_SRC, ENEMY_SPRITE_SRCS } from './assets';
 import {
   renderBombs,
   renderExplosions,
@@ -26,15 +26,7 @@ import {
   updateParticles,
   updateScorchMarks,
 } from './particles';
-import bombSprite from '../../assets/Bomb.png';
-import enemy1Sprite from '../../assets/Enemy1.png';
-import enemy2Sprite from '../../assets/Enemy2.png';
-import enemy3Sprite from '../../assets/Enemy3.png';
-import enemy4Sprite from '../../assets/Enemy4.png';
-import enemy5Sprite from '../../assets/Enemy5.png';
-import enemy6Sprite from '../../assets/Enemy6.png';
-import enemy7Sprite from '../../assets/Enemy7.png';
-import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, GraphMetricsStats, LevelTransition, Particle, ScorchMark } from './types';
+import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, GraphMetricsStats, LevelTransition, Particle, PathAlgorithm, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
@@ -62,6 +54,7 @@ export class GameEngine {
   public isGameOver = false;
   public isPlaying = false;
   public showGraphOverlay = false;
+  public algorithm: PathAlgorithm = 'dijkstra';
   public score = 0;
   private startTime = 0;
   private bombsPlacedCount = 0;
@@ -105,6 +98,8 @@ export class GameEngine {
         this.lastStatsKey = 'off';
         this.onGraphStatsUpdate({
           show: false,
+          algorithm: this.algorithm,
+          algorithmName: this.algorithm === 'dijkstra' ? 'DIJKSTRA' : 'A*',
           totalExpanded: 0,
           maxTime: 0,
           pathLenStr: '0 passos',
@@ -133,11 +128,13 @@ export class GameEngine {
     const hue = getLevelHueOffset(this.level);
     const themeColor = `hsl(${(48 + hue) % 360}, 96%, 54%)`;
 
-    const key = `on-${totalExpanded}-${maxTime.toFixed(2)}-${pathLenStr}-${themeColor}`;
+    const key = `on-${this.algorithm}-${totalExpanded}-${maxTime.toFixed(2)}-${pathLenStr}-${themeColor}`;
     if (key !== this.lastStatsKey) {
       this.lastStatsKey = key;
       this.onGraphStatsUpdate({
         show: true,
+        algorithm: this.algorithm,
+        algorithmName: this.algorithm === 'dijkstra' ? 'DIJKSTRA' : 'A*',
         totalExpanded,
         maxTime,
         pathLenStr,
@@ -305,7 +302,7 @@ export class GameEngine {
     }
   }
 
-  private takeDamage(cause = 'Dinamite', killerSprite = bombSprite): void {
+  private takeDamage(cause = 'Dinamite', killerSprite = BOMB_SPRITE_SRC): void {
     if (!this.isPlaying || this.invulnerableTimer > 0 || this.isGameOver) return;
     this.health--;
     if (this.health <= 0) {
@@ -345,6 +342,7 @@ export class GameEngine {
     this.health = this.maxHealth;
     this.transition = { phase: 'none', timer: 0, duration: 0 };
     this.showGraphOverlay = false;
+    this.algorithm = 'dijkstra';
     this.loadLevel();
     this.onLevelChange?.(this.level);
     this.emitGraphStats();
@@ -373,6 +371,7 @@ export class GameEngine {
     this.explosions = [];
     this.particles = [];
     this.scorchMarks = [];
+    this.algorithm = this.level % 2 === 1 ? 'dijkstra' : 'astar';
     this.grid = generateMap();
     this.enemies = spawnEnemies(this.grid, this.level);
     this.exit = hideExit(this.grid);
@@ -394,16 +393,7 @@ export class GameEngine {
     });
 
     if (touching) {
-      const enemySprites = [
-        enemy1Sprite,
-        enemy2Sprite,
-        enemy3Sprite,
-        enemy4Sprite,
-        enemy5Sprite,
-        enemy6Sprite,
-        enemy7Sprite,
-      ];
-      const sprite = enemySprites[touching.sprite % enemySprites.length] ?? enemy1Sprite;
+      const sprite = ENEMY_SPRITE_SRCS[touching.sprite % ENEMY_SPRITE_SRCS.length] ?? ENEMY_SPRITE_SRCS[0];
       this.takeDamage('Slime', sprite);
     }
   }
@@ -532,7 +522,7 @@ export class GameEngine {
 
     this.removeExplodedEnemies();
     this.checkEnemyContact();
-    updateEnemies(this.enemies, this.grid, this, this.bombs, dt);
+    updateEnemies(this.enemies, this.grid, this, this.bombs, dt, this.algorithm);
     this.removeExplodedEnemies();
     this.checkEnemyContact();
     this.emitGraphStats();
@@ -591,7 +581,7 @@ export class GameEngine {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width,
-      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit), this.score, this.showGraphOverlay);
+      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit), this.score, this.showGraphOverlay, this.algorithm);
 
     const shake = Math.pow(this.shakeTrauma, 2) * 5;
     const shakeX = (Math.random() * 2 - 1) * shake;

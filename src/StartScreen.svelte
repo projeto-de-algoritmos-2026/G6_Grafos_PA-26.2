@@ -159,7 +159,7 @@
               </div>
               <div class="control-row">
                 <span class="key-combo">G</span>
-                <span class="key-desc">Ativar inspeção visual do Grafo e A*</span>
+                <span class="key-desc">Ativar inspeção visual do Grafo e Busca</span>
               </div>
             </div>
 
@@ -195,19 +195,19 @@
             <div class="info-section">
               <div class="section-title">DINÂMICA EM TEMPO REAL</div>
               <p class="section-text">
-                Tijolos bloqueiam arestas temporariamente. Quando uma dinamite destrói um tijolo, novas arestas são inseridas no grafo em tempo de execução, recalculando instantaneamente a malha de caminhos!
+                Tijolos bloqueiam arestas temporariamente. Quando uma dinamite destrói um tijolo, novas arestas são inseridas no grafo em tempo de execução, recalculando as rotas.
               </p>
             </div>
 
             <div class="info-section">
-              <div class="section-title">ALGORITMO A* (A-ESTRELA)</div>
+              <div class="section-title">DIJKSTRA vs A* (MENOR CAMINHO)</div>
               <p class="section-text">
-                Algoritmo heurístico de busca de menor caminho (Shortest Path), guiando a perseguição dos inimigos através da função de avaliação <code>f(n) = g(n) + h(n)</code>:
+                O jogo implementa os dois algoritmos clássicos de menor caminho em grafos, alternando entre as fases:
               </p>
               <ul class="pixel-list">
-                <li><strong>Custo Real g(n):</strong> Número de passos acumulados desde a célula de origem.</li>
-                <li><strong>Heurística Admissível h(n):</strong> Distância de Manhattan <code>|x₁ - x₂| + |y₁ - y₂|</code>, consistente e admissível para grade ortogonal 4-direções.</li>
-                <li><strong>Inspeção Visual [G]:</strong> Pressione a tecla G a qualquer momento para ver o grafo, as conexões ativas, as células expandidas e a rota traçada.</li>
+                <li><strong>Dijkstra (Fases Ímpares):</strong> Busca uniforme avaliando <code>f(n) = g(n)</code> (heurística nula <code>h=0</code>). Expande nós radialmente em todas as direções até alcançar o alvo.</li>
+                <li><strong>A* (Fases Pares):</strong> Busca informada avaliando <code>f(n) = g(n) + h(n)</code> com a Heurística de Manhattan <code>|x₁ - x₂| + |y₁ - y₂|</code>, reduzindo os nós explorados mantendo a rota mínima.</li>
+                <li><strong>Inspeção Visual [G]:</strong> Pressione <code>G</code> para ver o grafo, nós expandidos e tempo de busca.</li>
               </ul>
               <div class="complexity-box">
                 COMPLEXIDADE: O((|V| + |E|) log |V|) TEMPO | O(|V|) ESPAÇO

@@ -1,5 +1,5 @@
 import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, getLevelHueOffset, type Grid, type Point } from './constants';
-import type { Bomb, Enemy, Explosion, GameSprites, LevelTransition } from './types';
+import type { Bomb, Enemy, Explosion, GameSprites, LevelTransition, PathAlgorithm } from './types';
 
 interface TintedTileCache {
   grass: CanvasImageSource;
@@ -53,7 +53,8 @@ export function renderHud(
   enemyCount: number,
   exitRevealed: boolean,
   score: number = 0,
-  showGraphOverlay: boolean = false
+  showGraphOverlay: boolean = false,
+  algorithm: PathAlgorithm = 'dijkstra'
 ): void {
   const heartSize = TILE_SIZE;
   const startX = Math.round((canvasWidth - maxHealth * heartSize) / 2);
@@ -75,7 +76,7 @@ export function renderHud(
   const hudThemeColor = `hsl(${(48 + hudHue) % 360}, 96%, 54%)`;
   ctx.font = '700 12px "Pixelify Sans", cursive, monospace';
   ctx.fillStyle = showGraphOverlay ? hudThemeColor : '#64748b';
-  ctx.fillText(showGraphOverlay ? '[G] GRAFO: ON' : '[G] GRAFO', 125, 34);
+  ctx.fillText(showGraphOverlay ? '[G] GRAFOS: ON' : '[G] GRAFOS: OFF', 125, 34);
 
   ctx.textAlign = 'right';
   ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
@@ -260,7 +261,7 @@ export function renderPlayer(
     animTimer: number;
     lastDx: number;
     facing: number;
-    invulnerableTimer: number;
+    invulnerableTimer?: number;
     transition?: LevelTransition;
   },
   sprite: HTMLImageElement,
@@ -371,7 +372,7 @@ export function renderPlayer(
     scaleX = 1 - breath * 0.4;
   }
 
-  if (player.invulnerableTimer > 0 && Math.floor(player.invulnerableTimer * 10) % 2 === 0) {
+  if (player.invulnerableTimer && player.invulnerableTimer > 0 && Math.floor(player.invulnerableTimer * 10) % 2 === 0) {
     alpha *= 0.35;
   }
 
@@ -479,6 +480,68 @@ export function renderVortex(
   ctx.restore();
 }
 
+const ENEMY_GRAPH_COLORS = [
+  {
+    main: 'rgba(34, 197, 94, 0.90)',
+    translucent: 'rgba(34, 197, 94, 0.22)',
+    corner: 'rgba(34, 197, 94, 0.95)',
+  },
+  {
+    main: 'rgba(244, 63, 94, 0.90)',
+    translucent: 'rgba(244, 63, 94, 0.22)',
+    corner: 'rgba(244, 63, 94, 0.95)',
+  },
+  {
+    main: 'rgba(6, 182, 212, 0.90)',
+    translucent: 'rgba(6, 182, 212, 0.22)',
+    corner: 'rgba(6, 182, 212, 0.95)',
+  },
+  {
+    main: 'rgba(192, 38, 211, 0.90)',
+    translucent: 'rgba(192, 38, 211, 0.22)',
+    corner: 'rgba(192, 38, 211, 0.95)',
+  },
+  {
+    main: 'rgba(99, 102, 241, 0.90)',
+    translucent: 'rgba(99, 102, 241, 0.22)',
+    corner: 'rgba(99, 102, 241, 0.95)',
+  },
+  {
+    main: 'rgba(234, 179, 8, 0.90)',
+    translucent: 'rgba(234, 179, 8, 0.22)',
+    corner: 'rgba(234, 179, 8, 0.95)',
+  },
+  {
+    main: 'rgba(249, 115, 22, 0.90)',
+    translucent: 'rgba(249, 115, 22, 0.22)',
+    corner: 'rgba(249, 115, 22, 0.95)',
+  },
+];
+
+function drawCornerL(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  color: string
+): void {
+  ctx.fillStyle = color;
+  const pad = 3;
+  const arm = 9;
+  const th = 3;
+
+  ctx.fillRect(tx + pad, ty + pad, arm, th);
+  ctx.fillRect(tx + pad, ty + pad, th, arm);
+
+  ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + pad, arm, th);
+  ctx.fillRect(tx + TILE_SIZE - pad - th, ty + pad, th, arm);
+
+  ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - th, arm, th);
+  ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - arm, th, arm);
+
+  ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + TILE_SIZE - pad - th, arm, th);
+  ctx.fillRect(tx + TILE_SIZE - pad - th, ty + TILE_SIZE - pad - arm, th, arm);
+}
+
 export function renderGraphOverlay(
   ctx: CanvasRenderingContext2D,
   grid: Grid,
@@ -504,44 +567,6 @@ export function renderGraphOverlay(
     }
   }
 
-  const enemyColors = [
-    {
-      main: 'rgba(34, 197, 94, 0.90)',
-      translucent: 'rgba(34, 197, 94, 0.22)',
-      corner: 'rgba(34, 197, 94, 0.95)',
-    },
-    {
-      main: 'rgba(244, 63, 94, 0.90)',
-      translucent: 'rgba(244, 63, 94, 0.22)',
-      corner: 'rgba(244, 63, 94, 0.95)',
-    },
-    {
-      main: 'rgba(6, 182, 212, 0.90)',
-      translucent: 'rgba(6, 182, 212, 0.22)',
-      corner: 'rgba(6, 182, 212, 0.95)',
-    },
-    {
-      main: 'rgba(192, 38, 211, 0.90)',
-      translucent: 'rgba(192, 38, 211, 0.22)',
-      corner: 'rgba(192, 38, 211, 0.95)',
-    },
-    {
-      main: 'rgba(99, 102, 241, 0.90)',
-      translucent: 'rgba(99, 102, 241, 0.22)',
-      corner: 'rgba(99, 102, 241, 0.95)',
-    },
-    {
-      main: 'rgba(234, 179, 8, 0.90)',
-      translucent: 'rgba(234, 179, 8, 0.22)',
-      corner: 'rgba(234, 179, 8, 0.95)',
-    },
-    {
-      main: 'rgba(249, 115, 22, 0.90)',
-      translucent: 'rgba(249, 115, 22, 0.22)',
-      corner: 'rgba(249, 115, 22, 0.95)',
-    },
-  ];
-
   const routeNodes = new Set<string>();
 
   for (const enemy of enemies) {
@@ -554,37 +579,9 @@ export function renderGraphOverlay(
     }
   }
 
-  function drawCornerL(
-    ctx: CanvasRenderingContext2D,
-    tx: number,
-    ty: number,
-    color: string
-  ): void {
-    ctx.fillStyle = color;
-    const pad = 3;
-    const arm = 9;
-    const th = 3;
-
-    // Canto Superior Esquerdo (┌)
-    ctx.fillRect(tx + pad, ty + pad, arm, th);
-    ctx.fillRect(tx + pad, ty + pad, th, arm);
-
-    // Canto Superior Direito (┐)
-    ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + pad, arm, th);
-    ctx.fillRect(tx + TILE_SIZE - pad - th, ty + pad, th, arm);
-
-    // Canto Inferior Esquerdo (└)
-    ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - th, arm, th);
-    ctx.fillRect(tx + pad, ty + TILE_SIZE - pad - arm, th, arm);
-
-    // Canto Inferior Direito (┘)
-    ctx.fillRect(tx + TILE_SIZE - pad - arm, ty + TILE_SIZE - pad - th, arm, th);
-    ctx.fillRect(tx + TILE_SIZE - pad - th, ty + TILE_SIZE - pad - arm, th, arm);
-  }
-
   for (const enemy of enemies) {
     if (!enemy.visitedCells || enemy.visitedCells.length === 0) continue;
-    const colors = enemyColors[enemy.sprite % enemyColors.length];
+    const colors = ENEMY_GRAPH_COLORS[enemy.sprite % ENEMY_GRAPH_COLORS.length];
     const drawnSet = new Set<string>();
 
     const allCells = [
@@ -625,7 +622,7 @@ export function renderGraphOverlay(
 
   for (const enemy of enemies) {
     if (!enemy.currentPath || enemy.currentPath.length === 0) continue;
-    const colors = enemyColors[enemy.sprite % enemyColors.length];
+    const colors = ENEMY_GRAPH_COLORS[enemy.sprite % ENEMY_GRAPH_COLORS.length];
 
     const path = enemy.currentPath;
     const enemyTileX = Math.round(enemy.x / TILE_SIZE);

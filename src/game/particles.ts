@@ -97,24 +97,12 @@ export function spawnPortalParticles(particles: Particle[], cx: number, cy: numb
 }
 
 export function spawnLandingImpact(particles: Particle[], cx: number, cy: number): void {
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
+    const dir = i < 5 ? -1 : 1;
     particles.push({
-      x: cx - 4 + (Math.random() - 0.5) * 6,
+      x: cx + dir * 4 + (Math.random() - 0.5) * 6,
       y: cy + (Math.random() - 0.5) * 4,
-      vx: -Math.random() * 55 - 25,
-      vy: -Math.random() * 20 - 5,
-      size: Math.random() < 0.4 ? 6 : 3,
-      color: randomColor(DUST_COLORS),
-      life: 0.25,
-      maxLife: 0.25,
-      drag: 1.5,
-    });
-  }
-  for (let i = 0; i < 5; i++) {
-    particles.push({
-      x: cx + 4 + (Math.random() - 0.5) * 6,
-      y: cy + (Math.random() - 0.5) * 4,
-      vx: Math.random() * 55 + 25,
+      vx: dir * (Math.random() * 55 + 25),
       vy: -Math.random() * 20 - 5,
       size: Math.random() < 0.4 ? 6 : 3,
       color: randomColor(DUST_COLORS),

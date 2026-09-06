@@ -1,18 +1,18 @@
 import { CellType, type Grid, type Point } from './constants';
 import { getNeighbors } from './map';
-import type { PathResult } from './types';
+import type { PathAlgorithm, PathResult } from './types';
 
 export const tileKey = (p: Point): string => `${p.x},${p.y}`;
 
-function aStarSearch(
+function searchShortestPath(
   grid: Grid,
   start: Point,
   goal: Point,
-  blocked: Set<string>
+  blocked: Set<string>,
+  heuristic: (p: Point) => number
 ): { path: Point[]; visited: Point[]; exploredEdges: PathResult['exploredEdges']; nodesExpanded: number } {
   const startKey = tileKey(start);
   const goalKey = tileKey(goal);
-  const heuristic = (p: Point) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
   const open = new Map<string, Point>([[startKey, start]]);
   const costs = new Map<string, number>([[startKey, 0]]);
   const parents = new Map<string, Point>();
@@ -75,11 +75,31 @@ function aStarSearch(
   };
 }
 
+export function dijkstraSearch(
+  grid: Grid,
+  start: Point,
+  goal: Point,
+  blocked: Set<string>
+) {
+  return searchShortestPath(grid, start, goal, blocked, () => 0);
+}
+
+export function aStarSearch(
+  grid: Grid,
+  start: Point,
+  goal: Point,
+  blocked: Set<string>
+) {
+  const heuristic = (p: Point) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
+  return searchShortestPath(grid, start, goal, blocked, heuristic);
+}
+
 export function findPath(
   grid: Grid,
   start: Point,
   goal: Point,
-  blocked = new Set<string>()
+  blocked = new Set<string>(),
+  algorithm: PathAlgorithm = 'astar'
 ): PathResult {
   const startKey = tileKey(start);
   const goalKey = tileKey(goal);
@@ -98,14 +118,11 @@ export function findPath(
     };
   }
 
-  const ITERS = 20;
+  const runAlgorithm = algorithm === 'dijkstra' ? dijkstraSearch : aStarSearch;
+
   const t0 = performance.now();
-  const res = aStarSearch(grid, start, goal, blocked);
-  for (let i = 1; i < ITERS; i++) {
-    aStarSearch(grid, start, goal, blocked);
-  }
-  const t1 = performance.now();
-  const timeMs = Math.max(0.01, (t1 - t0) / ITERS);
+  const res = runAlgorithm(grid, start, goal, blocked);
+  const timeMs = Math.max(0.01, +(performance.now() - t0).toFixed(2));
 
   return {
     ...res,

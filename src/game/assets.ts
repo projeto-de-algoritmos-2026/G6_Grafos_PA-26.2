@@ -28,19 +28,22 @@ function createImg(src: string): HTMLImageElement {
   return img;
 }
 
+export const BOMB_SPRITE_SRC = bombSprite;
+export const ENEMY_SPRITE_SRCS = [
+  enemy1Sprite,
+  enemy2Sprite,
+  enemy3Sprite,
+  enemy4Sprite,
+  enemy5Sprite,
+  enemy6Sprite,
+  enemy7Sprite,
+];
+
 export function loadGameSprites(): GameSprites {
   return {
     exit: createImg(closedSprite),
     exitOpen: createImg(openSprite),
-    enemies: [
-      enemy1Sprite,
-      enemy2Sprite,
-      enemy3Sprite,
-      enemy4Sprite,
-      enemy5Sprite,
-      enemy6Sprite,
-      enemy7Sprite,
-    ].map(createImg),
+    enemies: ENEMY_SPRITE_SRCS.map(createImg),
     bandit: createImg(banditSprite),
     bomb: createImg(bombSprite),
     bombExploding: createImg(bombExplodingSprite),
