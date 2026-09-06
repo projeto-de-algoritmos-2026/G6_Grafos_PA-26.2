@@ -1,10 +1,12 @@
 import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { generateMap } from './map';
+import { canLeaveLevel, hideExit, isExitRevealed } from './level';
 import { isInExplosion, spawnEnemies, updateEnemies } from './enemies';
 import { loadGameSprites } from './assets';
 import {
   renderBombs,
   renderExplosions,
+  renderExit,
   renderHud,
   renderMap,
   renderPlayer,
@@ -24,6 +26,8 @@ export class GameEngine {
   private ctx: CanvasRenderingContext2D;
   private grid: Grid;
   private sprites: GameSprites;
+  private exit: Point;
+  private level = 1;
 
   // Player state
   x = TILE_SIZE;
@@ -58,6 +62,7 @@ export class GameEngine {
     this.sprites = loadGameSprites();
     this.grid = generateMap();
     this.enemies = spawnEnemies(this.grid);
+    this.exit = hideExit(this.grid);
   }
 
   start(): void {
@@ -208,12 +213,20 @@ export class GameEngine {
   }
 
   private restart(): void {
+    this.level = 1;
     this.health = this.maxHealth;
+    this.loadLevel();
+  }
+
+  private loadLevel(): void {
     this.x = TILE_SIZE;
     this.y = TILE_SIZE;
     this.startX = TILE_SIZE;
     this.startY = TILE_SIZE;
     this.animTimer = 0;
+    this.lastDx = 0;
+    this.lastDy = 0;
+    this.facing = 1;
     this.invulnerableTimer = 0;
     this.shakeTrauma = 0;
     this.bombs = [];
@@ -222,6 +235,7 @@ export class GameEngine {
     this.scorchMarks = [];
     this.grid = generateMap();
     this.enemies = spawnEnemies(this.grid);
+    this.exit = hideExit(this.grid);
   }
 
   private checkEnemyContact(): void {
@@ -331,13 +345,23 @@ export class GameEngine {
         }
       }
     }
+    this.tryNextLevel();
+  }
+
+  private tryNextLevel(): void {
+    // Finish the arrival animation and let flames expire before changing maps.
+    if (this.animTimer > 0 || isInExplosion(this, this.explosions)) return;
+    if (!canLeaveLevel(this.grid, this.exit, this, this.enemies.length)) return;
+    this.level++;
+    this.loadLevel();
   }
 
   private render(): void {
     this.ctx.fillStyle = '#111';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width);
+    renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width,
+      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit));
 
     const shake = Math.pow(this.shakeTrauma, 2) * 5;
     const shakeX = (Math.random() * 2 - 1) * shake;
@@ -348,6 +372,9 @@ export class GameEngine {
 
     renderMap(this.ctx, this.grid, this.sprites);
     renderScorchMarks(this.ctx, this.scorchMarks);
+    if (isExitRevealed(this.grid, this.exit)) {
+      renderExit(this.ctx, this.exit, this.enemies.length === 0);
+    }
     renderExplosions(this.ctx, this.explosions, this.sprites);
     renderBombs(this.ctx, this.bombs, this.sprites, this.lastTime);
     renderParticles(this.ctx, this.particles);

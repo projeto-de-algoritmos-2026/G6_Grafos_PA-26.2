@@ -1,4 +1,4 @@
-import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid } from './constants';
+import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import type { Bomb, Explosion, GameSprites } from './types';
 
 export function renderHud(
@@ -6,16 +6,61 @@ export function renderHud(
   sprites: GameSprites,
   health: number,
   maxHealth: number,
-  canvasWidth: number
+  canvasWidth: number,
+  level: number,
+  enemyCount: number,
+  exitRevealed: boolean
 ): void {
   const heartSize = TILE_SIZE;
   const startX = (canvasWidth - maxHealth * heartSize) / 2;
   const startY = (HUD_HEIGHT - heartSize) / 2;
 
+  ctx.save();
+  ctx.font = 'bold 16px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillText(`NÍVEL ${level}`, 16, 16);
+  ctx.font = '12px monospace';
+  ctx.fillText(`Inimigos: ${enemyCount}`, 16, 35);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = enemyCount === 0 && exitRevealed ? '#86efac' : '#e2e8f0';
+  const status = !exitRevealed ? 'Encontre a saída oculta' :
+    enemyCount > 0 ? 'Elimine os inimigos' : 'Entre na saída!';
+  ctx.fillText(status, canvasWidth - 16, HUD_HEIGHT / 2);
+  ctx.restore();
+
   for (let i = 0; i < maxHealth; i++) {
     const img = i < health ? sprites.healthFull : sprites.healthEmpty;
     ctx.drawImage(img, startX + i * heartSize, startY, heartSize, heartSize);
   }
+}
+
+// A pixel-art door drawn on the canvas; no exit sprite exists in the asset set.
+export function renderExit(ctx: CanvasRenderingContext2D, exit: Point, unlocked: boolean): void {
+  ctx.save();
+  ctx.translate(exit.x * TILE_SIZE, exit.y * TILE_SIZE);
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(6, 4, 36, 40);
+  ctx.fillStyle = unlocked ? '#86efac' : '#94a3b8';
+  ctx.fillRect(10, 4, 28, 4);
+  ctx.fillRect(6, 8, 4, 32);
+  ctx.fillRect(38, 8, 4, 32);
+  ctx.fillStyle = unlocked ? '#14532d' : '#78350f';
+  ctx.fillRect(12, 10, 24, 30);
+  ctx.fillStyle = unlocked ? '#bbf7d0' : '#fbbf24';
+  if (unlocked) {
+    ctx.fillRect(22, 16, 4, 18);
+    ctx.fillRect(18, 20, 12, 4);
+    ctx.fillRect(20, 18, 8, 4);
+  } else {
+    ctx.fillRect(20, 21, 8, 10);
+    ctx.fillRect(20, 17, 2, 6);
+    ctx.fillRect(26, 17, 2, 6);
+    ctx.fillRect(22, 15, 4, 2);
+  }
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(6, 40, 36, 4);
+  ctx.restore();
 }
 
 export function renderMap(
