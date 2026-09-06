@@ -22,6 +22,14 @@ export interface Explosion {
   timer: number;
 }
 
+export interface GameOverStats {
+  killerName: string;
+  killerSprite: string;
+  timeSurvived: string;
+  bombsPlaced: number;
+  blocksDestroyed: number;
+}
+
 export interface Particle {
   x: number;
   y: number;
