@@ -8,7 +8,6 @@ export const LOSE_INTEREST_DISTANCE = 6;
 
 function patrolStep(enemy: Enemy, grid: Grid, start: Point, blocked: Set<string>): Point | undefined {
   const d = enemy.patrolDirection;
-  // Keep moving along the corridor, reverse at obstacles, turn only if both ends are blocked.
   const directions = [d, { x: -d.x, y: -d.y }, { x: d.y, y: d.x }, { x: -d.y, y: -d.x }];
   for (const direction of directions) {
     const goal = { x: start.x + direction.x, y: start.y + direction.y };
@@ -27,7 +26,6 @@ export function spawnEnemies(grid: Grid): Enemy[] {
     { x: MAP_WIDTH - 2, y: MAP_HEIGHT - 2 },
   ];
   return spawns.map((p, sprite) => {
-    // Reserve a small pocket, preserving indestructible walls and the rest of the map.
     for (const d of [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
       const x = p.x + d.x;
       const y = p.y + d.y;
@@ -68,14 +66,12 @@ export function updateEnemies(enemies: Enemy[], grid: Grid, player: Point, bombs
 
     let next: Point | undefined;
     if (enemy.mode === 'chase') {
-      // If the player stands on a bomb, approach an adjacent cell without crossing it.
       const goals = blocked.has(tileKey(goal)) ? getNeighbors(grid, goal.x, goal.y) : [goal];
       if (goals.some((p) => p.x === start.x && p.y === start.y)) continue;
       const paths = goals.map((p) => findPath(grid, start, p, blocked)).filter((path) => path.length > 0);
       paths.sort((a, b) => a.length - b.length);
       next = paths[0]?.[0];
     }
-    // Patrol also keeps enemies active when the player is behind destructible blocks.
     next ??= patrolStep(enemy, grid, start, blocked);
     if (!next) continue;
     enemy.startX = enemy.x;

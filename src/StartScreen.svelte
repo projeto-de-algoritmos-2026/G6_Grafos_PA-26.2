@@ -234,7 +234,7 @@
               <p class="section-text">
                 Svelte 5 (Runes) • TypeScript • HTML5 Canvas 2D
                 <br />
-                Pixel Art 16x16 (Escala 3x consistente, zero mixels)
+                Pixel Art 16x16 (Escala 3x)
               </p>
             </div>
           {/if}
@@ -311,7 +311,6 @@
     filter: drop-shadow(0 9px 0 rgba(0, 0, 0, 0.75));
   }
 
-  /* Logo: 200x100 em escala 3x = 600x300 px (Zero Mixels) */
   .logo {
     width: 600px;
     height: 300px;
@@ -549,7 +548,6 @@
     font-size: 15px;
   }
 
-  /* Sprites 16x16 em escala 3x = 48x48 px (Zero Mixels) */
   .pixel-sprite {
     width: 48px;
     height: 48px;

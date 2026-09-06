@@ -38,7 +38,6 @@ export class GameEngine {
   private exit: Point;
   private level = 1;
 
-  // Player state
   x = TILE_SIZE;
   y = TILE_SIZE;
   startX = TILE_SIZE;
@@ -52,7 +51,6 @@ export class GameEngine {
   invulnerableTimer = 0;
   public transition: LevelTransition = { phase: 'none', timer: 0, duration: 0 };
 
-  // Game over state & statistics
   public onGameOver?: (stats: GameOverStats) => void;
   public onLevelChange?: (level: number) => void;
   public isGameOver = false;
@@ -63,7 +61,6 @@ export class GameEngine {
   private blocksDestroyedCount = 0;
   private enemiesKilledCount = 0;
 
-  // Entities and visual effects
   private bombs: Bomb[] = [];
   private enemies: Enemy[] = [];
   private explosions: Explosion[] = [];
@@ -87,15 +84,13 @@ export class GameEngine {
   }
 
   start(): void {
-    if (typeof window !== 'undefined') window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keydown', this.onKeyDown);
     this.score = 0;
     this.enemiesKilledCount = 0;
     this.startTime = performance.now();
     this.lastTime = performance.now();
     this.onLevelChange?.(this.level);
-    if (typeof requestAnimationFrame !== 'undefined') {
-      this.rafId = requestAnimationFrame(this.tick);
-    }
+    this.rafId = requestAnimationFrame(this.tick);
   }
 
   startPlay(): void {
@@ -105,8 +100,8 @@ export class GameEngine {
   }
 
   destroy(): void {
-    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.rafId);
-    if (typeof window !== 'undefined') window.removeEventListener('keydown', this.onKeyDown);
+    cancelAnimationFrame(this.rafId);
+    window.removeEventListener('keydown', this.onKeyDown);
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -471,22 +466,13 @@ export class GameEngine {
         }
       }
     }
-    this.tryNextLevel(dt);
+    this.tryNextLevel();
   }
 
-  private tryNextLevel(dt: number): void {
+  private tryNextLevel(): void {
     if (this.transition.phase !== 'none') return;
-    // Finish the arrival animation and let flames expire before changing maps.
     if (this.animTimer > 0 || isInExplosion(this, this.explosions)) return;
     if (!canLeaveLevel(this.grid, this.exit, this, this.enemies.length)) return;
-
-    if (dt === 0) {
-      this.score += 1000;
-      this.level++;
-      this.loadLevel();
-      this.onLevelChange?.(this.level);
-      return;
-    }
 
     this.startExitTransition();
   }
@@ -555,7 +541,6 @@ export class GameEngine {
       const exitPixelX = (this.transition.exitX ?? this.exit.x * TILE_SIZE) + TILE_SIZE / 2;
       const exitPixelY = HUD_HEIGHT + (this.transition.exitY ?? this.exit.y * TILE_SIZE) + 28;
 
-      // Iris closes from p = 0.25 to 1.0
       if (p >= 0.25) {
         const irisT = (p - 0.25) / 0.75;
         const ease = irisT < 0.5 ? 2 * irisT * irisT : 1 - Math.pow(-2 * irisT + 2, 2) / 2;
@@ -567,7 +552,6 @@ export class GameEngine {
       const spawnPixelX = this.x + TILE_SIZE / 2;
       const spawnPixelY = HUD_HEIGHT + this.y + TILE_SIZE / 2;
 
-      // Iris opens from p = 0 to 0.45
       if (p < 0.45) {
         const irisT = p / 0.45;
         const ease = 1 - Math.pow(1 - irisT, 3);

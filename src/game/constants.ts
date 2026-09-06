@@ -18,7 +18,6 @@ export interface Point {
   y: number;
 }
 
-// Rainbow hue progression starting from default yellow (0deg offset)
 export const RAINBOW_HUE_OFFSETS = [0, 70, 130, 185, 240, 285, 325, 350];
 
 export function getLevelHueOffset(level: number): number {

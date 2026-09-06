@@ -19,7 +19,6 @@ export function renderHud(
   ctx.save();
   ctx.textBaseline = 'middle';
 
-  // Left: Level and Score
   ctx.textAlign = 'left';
   ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
   ctx.fillStyle = '#f8fafc';
@@ -29,7 +28,6 @@ export function renderHud(
   ctx.fillStyle = '#facc15';
   ctx.fillText(`PONTOS: ${score}`, 16, 34);
 
-  // Right: Enemy Count and Status Objective
   ctx.textAlign = 'right';
   ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
   ctx.fillStyle = enemyCount > 0 ? '#f87171' : '#4ade80';
@@ -43,7 +41,6 @@ export function renderHud(
 
   ctx.restore();
 
-  // Center: Health Hearts
   for (let i = 0; i < maxHealth; i++) {
     const img = i < health ? sprites.healthFull : sprites.healthEmpty;
     ctx.drawImage(img, startX + i * heartSize, startY, heartSize, heartSize);
@@ -253,7 +250,6 @@ export function renderPlayer(
     let alpha: number;
 
     if (p < 0.25) {
-      // Step/hop directly into the center of the trapdoor opening
       const t = p / 0.25;
       const hop = Math.sin(t * Math.PI) * 6;
       curCenterX = startCenterX + (holeX - startCenterX) * t;
@@ -262,7 +258,6 @@ export function renderPlayer(
       rotation = player.facing * Math.sin(t * Math.PI) * 0.1;
       alpha = 1.0;
     } else {
-      // Swirled directly into the vortex center
       const subP = (p - 0.25) / 0.75;
       curCenterX = holeX;
       curCenterY = holeY;
@@ -280,10 +275,9 @@ export function renderPlayer(
     ctx.restore();
     return;
   }
- else if (transition && transition.phase === 'entering') {
+  else if (transition && transition.phase === 'entering') {
     const p = Math.min(1, Math.max(0, 1 - transition.timer / transition.duration));
     if (p < 0.35) {
-      // Falling from the ceiling with gravity acceleration
       const fallT = p / 0.35;
       const easeFall = fallT * fallT;
       renderX = player.x;
@@ -291,7 +285,6 @@ export function renderPlayer(
       scaleY = 1.25;
       scaleX = 0.8;
     } else if (p < 0.6) {
-      // Squash bounce on landing impact
       const bounceT = (p - 0.35) / 0.25;
       const squash = Math.sin(bounceT * Math.PI) * 0.45;
       renderX = player.x;
@@ -299,7 +292,6 @@ export function renderPlayer(
       scaleY = 1.0 - squash;
       scaleX = 1.0 + squash * 0.65;
     } else if (p < 0.82) {
-      // Elastic recoil recovery
       const recT = (p - 0.6) / 0.22;
       const rebound = Math.sin(recT * Math.PI) * 0.14;
       renderX = player.x;
@@ -362,24 +354,25 @@ export function renderIrisWipe(
   const maxRadius = Math.hypot(width, height);
   if (radius >= maxRadius) return;
 
+  const gridX = Math.round(centerX / 3) * 3;
+  const gridY = Math.round(centerY / 3) * 3;
+  const gridR = Math.round(radius / 3) * 3;
+
   ctx.save();
   ctx.fillStyle = '#08080a';
   ctx.beginPath();
   ctx.rect(0, 0, width, height);
-  if (radius > 0) {
-    ctx.arc(centerX, centerY, Math.max(0, radius), 0, Math.PI * 2, true);
+  if (gridR > 0) {
+    ctx.arc(gridX, gridY, Math.max(0, gridR), 0, Math.PI * 2, true);
   }
   ctx.fill();
 
-  // Glowing ring around iris aperture matching the level hue
-  if (radius > 4 && radius < maxRadius - 20) {
+  if (gridR > 6 && gridR < maxRadius - 20) {
     const hue = getLevelHueOffset(level);
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.arc(gridX, gridY, gridR, 0, Math.PI * 2);
     ctx.strokeStyle = `hsl(${(50 + hue) % 360}, 96%, 54%)`;
     ctx.lineWidth = 3;
-    ctx.shadowColor = `hsl(${(50 + hue) % 360}, 100%, 65%)`;
-    ctx.shadowBlur = 10;
     ctx.stroke();
   }
 
@@ -394,51 +387,52 @@ export function renderVortex(
   time: number,
   level: number = 1
 ): void {
-  ctx.save();
-  ctx.translate(cx, cy);
-
+  const gridCx = Math.round(cx / 3) * 3;
+  const gridCy = Math.round(cy / 3) * 3;
   const hue = getLevelHueOffset(level);
-  const spinAngle = time * 0.01;
+
+  const spinAngle = time * 0.012;
   const numArms = 4;
 
-  // 4 luminous yellow shades shifting with the current level hue
-  const baseYellowHues = [48, 52, 45, 55];
-  const baseLightnesses = [56, 66, 48, 72];
-  const colors = baseYellowHues.map((h, i) => `hsl(${(h + hue) % 360}, 96%, ${baseLightnesses[i]}%)`);
+  const armColors = [
+    `hsl(${(48 + hue) % 360}, 98%, 54%)`,
+    `hsl(${(52 + hue) % 360}, 98%, 64%)`,
+    `hsl(${(45 + hue) % 360}, 96%, 46%)`,
+    `hsl(${(55 + hue) % 360}, 96%, 74%)`,
+  ];
 
-  // Swirling glowing spiral arms converging to the center
+  const drawnTexels = new Set<string>();
+  const maxR = Math.min(8, 2.5 + progress * 6);
+
+  ctx.save();
+
   for (let i = 0; i < numArms; i++) {
     const baseAngle = (i / numArms) * Math.PI * 2 + spinAngle;
-    ctx.strokeStyle = colors[i % colors.length];
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = colors[i % colors.length];
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
+    const armColor = armColors[i % armColors.length];
 
-    const maxR = 24 * Math.min(1, progress * 2.5);
-    for (let r = maxR; r >= 2; r -= 1.5) {
-      const angle = baseAngle + (maxR - r) * 0.24;
-      const x = Math.cos(angle) * r;
-      const y = Math.sin(angle) * (r * 0.75); // 0.75 perspective tilt matching 2.5D view
-      if (r === maxR) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
+    for (let r = 1.6; r <= maxR; r += 0.28) {
+      const theta = baseAngle + r * 0.48;
+      const tx = Math.round(Math.cos(theta) * r);
+      const ty = Math.round(Math.sin(theta) * (r * 0.72));
+
+      const key = `${tx},${ty}`;
+      if (drawnTexels.has(key)) continue;
+      drawnTexels.add(key);
+
+      const isTip = r > maxR - 0.6;
+      ctx.fillStyle = isTip ? `hsl(${(54 + hue) % 360}, 95%, 85%)` : armColor;
+      ctx.fillRect(gridCx + tx * 3, gridCy + ty * 3, 3, 3);
     }
-    ctx.stroke();
   }
 
-  // Dark central void singularity
-  const voidRadius = Math.max(2, 6 * (1 - progress * 0.3));
-  ctx.fillStyle = '#05070d';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, voidRadius, voidRadius * 0.75, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = '#060810';
+  ctx.fillRect(gridCx - 3, gridCy - 3, 6, 6);
 
-  ctx.strokeStyle = `hsl(${(50 + hue) % 360}, 96%, 60%)`;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  ctx.fillStyle = `hsl(${(50 + hue) % 360}, 96%, 58%)`;
+  ctx.fillRect(gridCx - 6, gridCy, 3, 3);
+  ctx.fillRect(gridCx + 6, gridCy, 3, 3);
+  ctx.fillRect(gridCx, gridCy - 6, 3, 3);
+  ctx.fillRect(gridCx, gridCy + 6, 3, 3);
 
   ctx.restore();
 }

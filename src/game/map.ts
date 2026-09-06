@@ -7,7 +7,6 @@ const DIRS: Point[] = [
   { x: 1, y: 0 },
 ];
 
-// Keep the classic hard-block lattice, with a more open soft-block distribution.
 export function generateMap(blockDensity = 0.45): Grid {
   const grid: Grid = [];
 
@@ -18,7 +17,6 @@ export function generateMap(blockDensity = 0.45): Grid {
       const isPillar = x % 2 === 0 && y % 2 === 0;
       const distanceFromSide = Math.min(x, MAP_WIDTH - 1 - x);
       const distanceFromTopOrBottom = Math.min(y, MAP_HEIGHT - 1 - y);
-      // An L-shaped pocket at each corner gives the player and enemies room to move.
       const isSpawn =
         (distanceFromSide <= 3 && distanceFromTopOrBottom === 1) ||
         (distanceFromSide === 1 && distanceFromTopOrBottom <= 3);

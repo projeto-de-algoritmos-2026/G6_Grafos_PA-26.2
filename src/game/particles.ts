@@ -70,13 +70,11 @@ export function spawnPortalParticles(particles: Particle[], cx: number, cy: numb
     const px = cx + Math.cos(angle) * dist;
     const py = cy + Math.sin(angle) * (dist * 0.75);
 
-    // Tangential (swirling orbit) + Inward suction towards (cx, cy)
     const inwardSpeed = 40;
     const orbitSpeed = 60;
     const vx = -Math.cos(angle) * inwardSpeed - Math.sin(angle) * orbitSpeed;
     const vy = (-Math.sin(angle) * inwardSpeed + Math.cos(angle) * orbitSpeed) * 0.75;
 
-    // Luminous yellow tones shifting with level hue
     const isWhiteHighlight = Math.random() < 0.2;
     const yellowHues = [48, 52, 45, 55];
     const pickedHue = yellowHues[Math.floor(Math.random() * yellowHues.length)];
@@ -99,7 +97,6 @@ export function spawnPortalParticles(particles: Particle[], cx: number, cy: numb
 }
 
 export function spawnLandingImpact(particles: Particle[], cx: number, cy: number): void {
-  // Left dust blast
   for (let i = 0; i < 5; i++) {
     particles.push({
       x: cx - 4 + (Math.random() - 0.5) * 6,
@@ -113,7 +110,6 @@ export function spawnLandingImpact(particles: Particle[], cx: number, cy: number
       drag: 1.5,
     });
   }
-  // Right dust blast
   for (let i = 0; i < 5; i++) {
     particles.push({
       x: cx + 4 + (Math.random() - 0.5) * 6,
@@ -127,7 +123,6 @@ export function spawnLandingImpact(particles: Particle[], cx: number, cy: number
       drag: 1.5,
     });
   }
-  // Upward celebratory sparkle burst
   for (let i = 0; i < 4; i++) {
     particles.push({
       x: cx + (Math.random() - 0.5) * 8,
@@ -164,7 +159,6 @@ export function spawnEnemyDeathParticles(
     const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
     const speed = Math.random() * 140 + 35;
     const rand = Math.random();
-    // Strictly multiples of 3: 12px (4 texels), 9px (3 texels), 6px (2 texels), 3px (1 texel)
     const size = rand < 0.15 ? 12 : rand < 0.45 ? 9 : rand < 0.75 ? 6 : 3;
     const life = Math.random() * 0.4 + 0.35;
 
@@ -182,7 +176,6 @@ export function spawnEnemyDeathParticles(
     });
   }
 
-  // 14 fast highlight sparkles
   for (let i = 0; i < 14; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = Math.random() * 180 + 70;
@@ -226,7 +219,6 @@ export function renderParticles(ctx: CanvasRenderingContext2D, particles: Partic
   for (const p of particles) {
     ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
     ctx.fillStyle = p.color;
-    // Snap to 3x3 pixel grid to match the 16x16 -> 48x48 native texel grid with zero mixels
     const px = Math.round(p.x / 3) * 3;
     const py = Math.round(p.y / 3) * 3;
     ctx.fillRect(px, py, p.size, p.size);

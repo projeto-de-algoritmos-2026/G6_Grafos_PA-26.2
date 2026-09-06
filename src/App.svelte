@@ -18,7 +18,6 @@
 
   onMount(() => {
     engine = new GameEngine(canvas);
-    (window as any).__engine = engine;
     engine.onGameOver = (stats) => {
       gameState = "gameover";
       gameOverStats = stats;

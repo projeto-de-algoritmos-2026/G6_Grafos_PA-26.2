@@ -3,8 +3,6 @@ import { getNeighbors } from './map';
 
 export const tileKey = (p: Point): string => `${p.x},${p.y}`;
 
-// Unit-cost, four-directional A*: Manhattan distance is admissible and consistent.
-// The returned path excludes the start and includes the goal.
 export function findPath(grid: Grid, start: Point, goal: Point, blocked = new Set<string>()): Point[] {
   const startKey = tileKey(start);
   const goalKey = tileKey(goal);

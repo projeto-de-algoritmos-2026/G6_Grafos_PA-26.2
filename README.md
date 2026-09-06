@@ -72,8 +72,5 @@ inimigos novamente. Use WASD ou as setas para mover e espaço para colocar bomba
 
 ```bash
 npm run check
-npm test
 ```
 
-Os testes usam Node.js 24 ou superior e verificam rotas do A* contra uma busca
-em largura em 100 mapas, além de obstáculos e movimentação dos inimigos.
