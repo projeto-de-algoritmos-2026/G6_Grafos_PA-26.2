@@ -71,7 +71,6 @@
   class:is-exiting={isExiting}
   onanimationend={handleAnimationEnd}
 >
-  <!-- Menu Principal -->
   <div class="menu-container" class:is-hidden={activeModal !== null}>
     <div class="logo-wrapper">
       <img src={logoImg} alt="Bandit Boy" class="logo" />
@@ -109,7 +108,6 @@
     </div>
   </div>
 
-  <!-- Modal Informativo -->
   {#if activeModal !== null}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
     <div
@@ -159,6 +157,10 @@
                 <span class="key-combo">EMPURRÃO</span>
                 <span class="key-desc">Ande contra a dinamite para chutá-la</span>
               </div>
+              <div class="control-row">
+                <span class="key-combo">G</span>
+                <span class="key-desc">Ativar inspeção visual do Grafo e A*</span>
+              </div>
             </div>
 
             <div class="info-section">
@@ -185,7 +187,7 @@
               </p>
               <ul class="pixel-list">
                 <li><strong>Vértices (V):</strong> Cada célula livre transitável do mapa.</li>
-                <li><strong>Arestas (E):</strong> Conexões ortogonais livres (cima, baixo, esquerda, direita).</li>
+                <li><strong>Arestas (E):</strong> Conexões ortogonais livres (cima, baixo, esquerda, direita) com custo unitário w = 1.</li>
                 <li>Paredes de pedra são obstáculos estáticos e intransponíveis.</li>
               </ul>
             </div>
@@ -198,12 +200,17 @@
             </div>
 
             <div class="info-section">
-              <div class="section-title">BUSCA EM LARGURA (BFS)</div>
+              <div class="section-title">ALGORITMO A* (A-ESTRELA)</div>
               <p class="section-text">
-                Algoritmo aplicado para determinação de caminhos mínimos (Shortest Path) em grafos não-ponderados, navegação de entidades e detecção de rotas de fuga seguras.
+                Algoritmo heurístico de busca de menor caminho (Shortest Path), guiando a perseguição dos inimigos através da função de avaliação <code>f(n) = g(n) + h(n)</code>:
               </p>
+              <ul class="pixel-list">
+                <li><strong>Custo Real g(n):</strong> Número de passos acumulados desde a célula de origem.</li>
+                <li><strong>Heurística Admissível h(n):</strong> Distância de Manhattan <code>|x₁ - x₂| + |y₁ - y₂|</code>, consistente e admissível para grade ortogonal 4-direções.</li>
+                <li><strong>Inspeção Visual [G]:</strong> Pressione a tecla G a qualquer momento para ver o grafo, as conexões ativas, as células expandidas e a rota traçada.</li>
+              </ul>
               <div class="complexity-box">
-                COMPLEXIDADE: O(|V| + |E|) TEMPO | O(|V|) ESPAÇO
+                COMPLEXIDADE: O((|V| + |E|) log |V|) TEMPO | O(|V|) ESPAÇO
               </div>
             </div>
 
@@ -326,8 +333,6 @@
     gap: 12px;
     width: 100%;
   }
-
-  /* Botões em pixel art com passos de 3px */
   .pixel-btn {
     position: relative;
     width: 270px;
@@ -410,8 +415,6 @@
     letter-spacing: 0.6px;
     text-shadow: 0 3px 0 #000000;
   }
-
-  /* Modais Informativos */
   .modal-backdrop {
     position: absolute;
     inset: 0;

@@ -1,4 +1,4 @@
-import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
+import { CellType, getLevelHueOffset, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Grid, type Point } from './constants';
 import { generateMap } from './map';
 import { canLeaveLevel, hideExit, isExitRevealed } from './level';
 import { isInExplosion, spawnEnemies, updateEnemies } from './enemies';
@@ -7,6 +7,7 @@ import {
   renderBombs,
   renderExplosions,
   renderExit,
+  renderGraphOverlay,
   renderHud,
   renderIrisWipe,
   renderMap,
@@ -29,7 +30,7 @@ import bombSprite from '../../assets/Bomb.png';
 import enemy1Sprite from '../../assets/Enemy1.png';
 import enemy2Sprite from '../../assets/Enemy2.png';
 import enemy3Sprite from '../../assets/Enemy3.png';
-import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, LevelTransition, Particle, ScorchMark } from './types';
+import type { Bomb, Enemy, Explosion, GameOverStats, GameSprites, GraphMetricsStats, LevelTransition, Particle, ScorchMark } from './types';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D;
@@ -53,8 +54,10 @@ export class GameEngine {
 
   public onGameOver?: (stats: GameOverStats) => void;
   public onLevelChange?: (level: number) => void;
+  public onGraphStatsUpdate?: (stats: GraphMetricsStats) => void;
   public isGameOver = false;
   public isPlaying = false;
+  public showGraphOverlay = false;
   public score = 0;
   private startTime = 0;
   private bombsPlacedCount = 0;
@@ -83,6 +86,63 @@ export class GameEngine {
     this.exit = hideExit(this.grid);
   }
 
+  public toggleGraphOverlay(): void {
+    this.showGraphOverlay = !this.showGraphOverlay;
+    this.emitGraphStats();
+  }
+
+  private lastStatsKey = '';
+
+  private emitGraphStats(): void {
+    if (!this.onGraphStatsUpdate) return;
+
+    if (!this.showGraphOverlay) {
+      if (this.lastStatsKey !== 'off') {
+        this.lastStatsKey = 'off';
+        this.onGraphStatsUpdate({
+          show: false,
+          totalExpanded: 0,
+          maxTime: 0,
+          pathLenStr: '0 passos',
+          themeColor: '#facc15',
+        });
+      }
+      return;
+    }
+
+    let totalExpanded = 0;
+    let maxTime = 0;
+    let activeChasers = 0;
+    let avgPathLen = 0;
+
+    for (const e of this.enemies) {
+      if (e.nodesExpanded) {
+        totalExpanded += e.nodesExpanded;
+        maxTime = Math.max(maxTime, e.searchTimeMs ?? 0);
+        if (e.currentPath && e.currentPath.length > 0) {
+          avgPathLen += e.currentPath.length;
+          activeChasers++;
+        }
+      }
+    }
+
+    const pathLenStr = activeChasers > 0 ? `${Math.round(avgPathLen / activeChasers)} passos` : '0 passos';
+    const hue = getLevelHueOffset(this.level);
+    const themeColor = `hsl(${(48 + hue) % 360}, 96%, 54%)`;
+
+    const key = `on-${totalExpanded}-${maxTime.toFixed(1)}-${pathLenStr}-${themeColor}`;
+    if (key !== this.lastStatsKey) {
+      this.lastStatsKey = key;
+      this.onGraphStatsUpdate({
+        show: true,
+        totalExpanded,
+        maxTime,
+        pathLenStr,
+        themeColor,
+      });
+    }
+  }
+
   start(): void {
     window.addEventListener('keydown', this.onKeyDown);
     this.score = 0;
@@ -105,6 +165,12 @@ export class GameEngine {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'KeyG') {
+      e.preventDefault();
+      this.toggleGraphOverlay();
+      return;
+    }
+
     if (!this.isPlaying || this.isGameOver || this.transition.phase !== 'none') return;
 
     let dx = 0;
@@ -502,7 +568,7 @@ export class GameEngine {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     renderHud(this.ctx, this.sprites, this.health, this.maxHealth, this.canvas.width,
-      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit), this.score);
+      this.level, this.enemies.length, isExitRevealed(this.grid, this.exit), this.score, this.showGraphOverlay);
 
     const shake = Math.pow(this.shakeTrauma, 2) * 5;
     const shakeX = (Math.random() * 2 - 1) * shake;
@@ -513,6 +579,9 @@ export class GameEngine {
 
     renderMap(this.ctx, this.grid, this.sprites, this.level);
     renderScorchMarks(this.ctx, this.scorchMarks);
+    if (this.showGraphOverlay) {
+      renderGraphOverlay(this.ctx, this.grid, this.enemies);
+    }
     if (isExitRevealed(this.grid, this.exit)) {
       renderExit(this.ctx, this.exit, this.enemies.length === 0 ? this.sprites.exitOpen : this.sprites.exit);
       if (this.transition.phase === 'exiting') {

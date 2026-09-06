@@ -1,5 +1,5 @@
 import { CellType, HUD_HEIGHT, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, getLevelHueOffset, type Grid, type Point } from './constants';
-import type { Bomb, Explosion, GameSprites, LevelTransition } from './types';
+import type { Bomb, Enemy, Explosion, GameSprites, LevelTransition } from './types';
 
 export function renderHud(
   ctx: CanvasRenderingContext2D,
@@ -10,7 +10,8 @@ export function renderHud(
   level: number,
   enemyCount: number,
   exitRevealed: boolean,
-  score: number = 0
+  score: number = 0,
+  showGraphOverlay: boolean = false
 ): void {
   const heartSize = TILE_SIZE;
   const startX = Math.round((canvasWidth - maxHealth * heartSize) / 2);
@@ -27,6 +28,12 @@ export function renderHud(
   ctx.font = '600 15px "Pixelify Sans", cursive, monospace';
   ctx.fillStyle = '#facc15';
   ctx.fillText(`PONTOS: ${score}`, 16, 34);
+
+  const hudHue = getLevelHueOffset(level);
+  const hudThemeColor = `hsl(${(48 + hudHue) % 360}, 96%, 54%)`;
+  ctx.font = '700 12px "Pixelify Sans", cursive, monospace';
+  ctx.fillStyle = showGraphOverlay ? hudThemeColor : '#64748b';
+  ctx.fillText(showGraphOverlay ? '[G] GRAFO: ON' : '[G] GRAFO', 125, 34);
 
   ctx.textAlign = 'right';
   ctx.font = '700 16px "Pixelify Sans", cursive, monospace';
@@ -433,6 +440,162 @@ export function renderVortex(
   ctx.fillRect(gridCx + 6, gridCy, 3, 3);
   ctx.fillRect(gridCx, gridCy - 6, 3, 3);
   ctx.fillRect(gridCx, gridCy + 6, 3, 3);
+
+  ctx.restore();
+}
+
+export function renderGraphOverlay(
+  ctx: CanvasRenderingContext2D,
+  grid: Grid,
+  enemies: Enemy[]
+): void {
+  ctx.save();
+
+  const graphColor = 'rgba(15, 23, 42, 0.45)';
+
+  ctx.fillStyle = graphColor;
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      if (grid[y][x] !== CellType.EMPTY) continue;
+      const cx = x * TILE_SIZE + 24;
+      const cy = y * TILE_SIZE + 24;
+
+      if (x + 1 < MAP_WIDTH && grid[y][x + 1] === CellType.EMPTY) {
+        ctx.fillRect(cx + 6, cy - 3, 36, 6);
+      }
+      if (y + 1 < MAP_HEIGHT && grid[y + 1]?.[x] === CellType.EMPTY) {
+        ctx.fillRect(cx - 3, cy + 6, 6, 36);
+      }
+    }
+  }
+
+  const enemyColors = [
+    { main: 'rgba(34, 197, 94, 0.90)' },
+    { main: 'rgba(244, 63, 94, 0.90)' },
+    { main: 'rgba(6, 182, 212, 0.90)' },
+  ];
+
+  function edgeKey(p1: Point, p2: Point): string {
+    const k1 = `${p1.x},${p1.y}`;
+    const k2 = `${p2.x},${p2.y}`;
+    return k1 < k2 ? `${k1}<->${k2}` : `${k2}<->${k1}`;
+  }
+
+  const routeNodes = new Map<string, string>();
+  const routeEdges = new Set<string>();
+
+  for (const enemy of enemies) {
+    if (!enemy.currentPath || enemy.currentPath.length === 0) continue;
+    const colors = enemyColors[enemy.sprite % enemyColors.length];
+    const enemyTileX = Math.round(enemy.x / TILE_SIZE);
+    const enemyTileY = Math.round(enemy.y / TILE_SIZE);
+    const fullRoute = [{ x: enemyTileX, y: enemyTileY }, ...enemy.currentPath];
+
+    for (const p of enemy.currentPath) {
+      routeNodes.set(`${p.x},${p.y}`, colors.main);
+    }
+    for (let i = 0; i < fullRoute.length - 1; i++) {
+      routeEdges.add(edgeKey(fullRoute[i], fullRoute[i + 1]));
+    }
+  }
+
+  const visitedNodes = new Set<string>();
+  const exploredEdgesOutsideRoute: { from: Point; to: Point }[] = [];
+  const drawnExploredEdges = new Set<string>();
+
+  for (const enemy of enemies) {
+    if (enemy.visitedCells) {
+      for (const cell of enemy.visitedCells) {
+        const key = `${cell.x},${cell.y}`;
+        if (!routeNodes.has(key)) {
+          visitedNodes.add(key);
+        }
+      }
+    }
+    if (enemy.exploredEdges) {
+      for (const edge of enemy.exploredEdges) {
+        const ek = edgeKey(edge.from, edge.to);
+        if (!routeEdges.has(ek) && !drawnExploredEdges.has(ek)) {
+          drawnExploredEdges.add(ek);
+          exploredEdgesOutsideRoute.push(edge);
+        }
+      }
+    }
+  }
+
+  ctx.fillStyle = 'rgba(250, 204, 21, 0.70)';
+  for (const edge of exploredEdgesOutsideRoute) {
+    const p1 = edge.from;
+    const p2 = edge.to;
+    if (p1.x === p2.x) {
+      const minY = Math.min(p1.y, p2.y) * TILE_SIZE + 24 + 6;
+      const maxY = Math.max(p1.y, p2.y) * TILE_SIZE + 24 - 6;
+      ctx.fillRect(p1.x * TILE_SIZE + 21, minY, 6, maxY - minY);
+    } else if (p1.y === p2.y) {
+      const minX = Math.min(p1.x, p2.x) * TILE_SIZE + 24 + 6;
+      const maxX = Math.max(p1.x, p2.x) * TILE_SIZE + 24 - 6;
+      ctx.fillRect(minX, p1.y * TILE_SIZE + 21, maxX - minX, 6);
+    }
+  }
+
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      if (grid[y][x] !== CellType.EMPTY) continue;
+      const key = `${x},${y}`;
+      const cx = x * TILE_SIZE + 24;
+      const cy = y * TILE_SIZE + 24;
+
+      if (routeNodes.has(key)) {
+        continue;
+      } else if (visitedNodes.has(key)) {
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+        ctx.fillRect(cx - 6, cy - 6, 12, 12);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
+        ctx.fillRect(cx - 3, cy - 3, 6, 6);
+      } else {
+        ctx.fillStyle = graphColor;
+        ctx.fillRect(cx - 6, cy - 6, 12, 12);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillRect(cx - 3, cy - 3, 6, 6);
+      }
+    }
+  }
+
+  for (const enemy of enemies) {
+    if (!enemy.currentPath || enemy.currentPath.length === 0) continue;
+    const colors = enemyColors[enemy.sprite % enemyColors.length];
+
+    const path = enemy.currentPath;
+    const enemyTileX = Math.round(enemy.x / TILE_SIZE);
+    const enemyTileY = Math.round(enemy.y / TILE_SIZE);
+    const fullRoute = [{ x: enemyTileX, y: enemyTileY }, ...path];
+
+    ctx.fillStyle = colors.main;
+    for (let i = 0; i < fullRoute.length - 1; i++) {
+      const p1 = fullRoute[i];
+      const p2 = fullRoute[i + 1];
+
+      if (p1.x === p2.x) {
+        const minY = Math.min(p1.y, p2.y) * TILE_SIZE + 24 + 6;
+        const maxY = Math.max(p1.y, p2.y) * TILE_SIZE + 24 - 6;
+        ctx.fillRect(p1.x * TILE_SIZE + 21, minY, 6, maxY - minY);
+      } else if (p1.y === p2.y) {
+        const minX = Math.min(p1.x, p2.x) * TILE_SIZE + 24 + 6;
+        const maxX = Math.max(p1.x, p2.x) * TILE_SIZE + 24 - 6;
+        ctx.fillRect(minX, p1.y * TILE_SIZE + 21, maxX - minX, 6);
+      }
+    }
+
+    for (const p of path) {
+      const cx = p.x * TILE_SIZE + 24;
+      const cy = p.y * TILE_SIZE + 24;
+
+      ctx.fillStyle = colors.main;
+      ctx.fillRect(cx - 6, cy - 6, 12, 12);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    }
+  }
 
   ctx.restore();
 }

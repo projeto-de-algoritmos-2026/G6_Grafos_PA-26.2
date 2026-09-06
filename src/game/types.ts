@@ -66,6 +66,27 @@ export interface GameSprites {
   explosions: HTMLImageElement[];
 }
 
+export interface ExploredEdge {
+  from: Point;
+  to: Point;
+}
+
+export interface GraphMetricsStats {
+  show: boolean;
+  totalExpanded: number;
+  maxTime: number;
+  pathLenStr: string;
+  themeColor: string;
+}
+
+export interface PathResult {
+  path: Point[];
+  visited: Point[];
+  exploredEdges: ExploredEdge[];
+  nodesExpanded: number;
+  timeMs: number;
+}
+
 export interface Enemy {
   mode: 'patrol' | 'chase';
   patrolDirection: Point;
@@ -80,6 +101,11 @@ export interface Enemy {
   invulnerableTimer: number;
   moveTimer: number;
   moveInterval: number;
+  currentPath?: Point[];
+  visitedCells?: Point[];
+  exploredEdges?: ExploredEdge[];
+  nodesExpanded?: number;
+  searchTimeMs?: number;
 }
 
 export type TransitionPhase = 'none' | 'exiting' | 'entering';
