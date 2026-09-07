@@ -120,5 +120,5 @@ export interface LevelTransition {
   landingTriggered?: boolean;
 }
 
-export type UpgradeKind = 'fire' | 'boots';
+export type UpgradeKind = 'fire' | 'boots' | 'shield';
 export interface Upgrade { x: number; y: number; kind: UpgradeKind; }

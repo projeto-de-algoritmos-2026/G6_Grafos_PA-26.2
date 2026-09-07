@@ -65,7 +65,7 @@ export class GameEngine {
   private enemiesKilledCount = 0;
 
   private upgrades: Upgrade[] = [];
-  private upgradeTimers = { fire: 0, boots: 0 };
+  private upgradeTimers = { fire: 0, boots: 0, shield: 0 };
   public onUpgradesChange?: (timers: Record<UpgradeKind, number>) => void;
   private heldDirections = new Map<string, Point>();
   private moveCooldown = 0;
@@ -77,10 +77,10 @@ export class GameEngine {
       if (cell === CellType.BLOCK && (x !== this.exit.x || y !== this.exit.y)) blocks.push({ x, y });
     }));
     this.upgrades = [];
-    const count = Math.min(blocks.length, Math.max(2, Math.floor(blocks.length * 0.2)));
+    const count = Math.min(blocks.length, Math.max(3, Math.floor(blocks.length * 0.2)));
     for (let i = 0; i < count; i++) {
       const [point] = blocks.splice(Math.floor(Math.random() * blocks.length), 1);
-      this.upgrades.push({ ...point!, kind: i % 2 === 0 ? 'fire' : 'boots' });
+      this.upgrades.push({ ...point!, kind: (['fire', 'boots', 'shield'] as const)[i % 3] });
     }
   }
 
@@ -342,6 +342,7 @@ export class GameEngine {
 
   private takeDamage(cause = 'Dinamite', killerSprite = bombSprite): void {
     if (this.invulnerableTimer > 0 || this.isGameOver) return;
+    if (cause === 'Dinamite' && this.upgradeTimers.shield > 0) return;
     this.health--;
     if (this.health <= 0) {
       this.health = 0;
@@ -374,7 +375,7 @@ export class GameEngine {
   public restart(): void {
     this.isGameOver = false;
     this.isPlaying = true;
-    this.upgradeTimers = { fire: 0, boots: 0 };
+    this.upgradeTimers = { fire: 0, boots: 0, shield: 0 };
     this.onUpgradesChange?.({ ...this.upgradeTimers });
     this.level = 1;
     this.score = 0;
@@ -461,7 +462,7 @@ export class GameEngine {
 
   private update(dt: number): void {
     if (this.isPlaying && !this.isGameOver) {
-      for (const kind of ['fire', 'boots'] as const) this.upgradeTimers[kind] = Math.max(0, this.upgradeTimers[kind] - dt);
+      for (const kind of ['fire', 'boots', 'shield'] as const) this.upgradeTimers[kind] = Math.max(0, this.upgradeTimers[kind] - dt);
       this.onUpgradesChange?.({ ...this.upgradeTimers });
     }
     if (this.shakeTrauma > 0) {
@@ -636,7 +637,11 @@ export class GameEngine {
     for (const upgrade of this.upgrades) {
       if (this.grid[upgrade.y]?.[upgrade.x] !== CellType.EMPTY) continue;
       const frames = this.sprites.upgrades[upgrade.kind];
-      this.ctx.drawImage(frames[Math.floor(this.lastTime / 150) % frames.length], upgrade.x * TILE_SIZE, upgrade.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      const scale = upgrade.kind === 'shield' ? 0.85 + Math.sin(this.lastTime / 400) * 0.05 : 1;
+      const size = TILE_SIZE * scale;
+      const inset = (TILE_SIZE - size) / 2;
+      this.ctx.drawImage(frames[Math.floor(this.lastTime / 150) % frames.length],
+        upgrade.x * TILE_SIZE + inset, upgrade.y * TILE_SIZE + inset, size, size);
     }
     if (this.showGraphOverlay) {
       renderGraphOverlay(this.ctx, this.grid, this.enemies);
